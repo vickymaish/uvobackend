@@ -14,9 +14,12 @@ const orderSchema = new mongoose.Schema({
   deadline: { type: Date, required: true },        // Deadline (Date)
   pages: { type: Number, required: true },         // Number of pages
   topic: { type: String, required: true },         // Topic
-  cpp: { type: Number, required: true },           // Cost per page
+  amount: { type: Number, required: true },        // Amount in USD
+  items: [itemSchema],                             // Array of items with detailed info
   totalPrice: { type: Number, required: true },    // Total price of the order
   status: { type: String, default: 'Pending' },    // Order status
 });
+
+module.exports = mongoose.model('Order', orderSchema);
 
 module.exports = mongoose.model('Order', orderSchema);

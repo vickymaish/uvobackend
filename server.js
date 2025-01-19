@@ -12,7 +12,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // MongoDB connection
-mongoose.connect('mongodb://localhost:27017/uvotake')
+mongoose.connect('mongodb://localhost:27017/uvotake', { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.log('Error connecting to MongoDB:', err));
 
@@ -21,8 +21,8 @@ mongoose.connect('mongodb://localhost:27017/uvotake')
 // POST route to create a new order
 app.post('/api/orders', async (req, res) => {
   try {
-    const { customerName, stats, deadline, pages, topic, amount, items, totalPrice, status } = req.body;
-    const newOrder = new Order({ customerName, stats, deadline, pages, topic, amount, items, totalPrice, status });
+    const { customerName, items, totalPrice } = req.body;
+    const newOrder = new Order({ customerName, items, totalPrice });
 
     await newOrder.save();
     res.status(201).json(newOrder);
@@ -39,6 +39,12 @@ app.get('/api/orders', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve orders' });
   }
+});
+
+// Start the server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
 
 // Start the server

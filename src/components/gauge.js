@@ -37,7 +37,7 @@ export default function Gauge() {
       height={100}
       startAngle={-110}
       endAngle={110}
-      value={80}
+      value={40}
     >
       <GaugeReferenceArc />
       <GaugeValueArc />

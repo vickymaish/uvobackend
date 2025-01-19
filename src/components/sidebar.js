@@ -64,7 +64,9 @@ const Sidebar = () => {
             <p>Bids</p>
             </div>
 
-            <div className="flex flex-row items-center gap-2 cursor-pointer">
+            <div
+            onClick={()=> navigate('/profile')}
+            className="flex flex-row items-center gap-2 cursor-pointer">
             <MdAccountCircle />
             <p>Account</p>
             </div>

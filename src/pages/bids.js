@@ -8,14 +8,13 @@ const BidsPage = () => {
 
   const columns = [
     { field: "id", headerName: "ID", width: 100 },
-    { field: "date", headerName: "Date", width: 150 },
-    { field: "item", headerName: "Item", width: 200 },
-    { field: "customer", headerName: "Customer", width: 200 },
-    { field: "stats", headerName: "Stats", width: 200 },
+    { field: "topicTitle", headerName: "Title", width: 150 },
+    { field: "discipline", headerName: "Discipline", width: 200 },
+    { field: "cpp", headerName: "CPP", width: 200 },
+    { field: "cost", headerName: "Cost", width: 200 },
     { field: "deadline", headerName: "Deadline", width: 200 },
     { field: "pages", headerName: "Pages", width: 100 },
-    { field: "topic", headerName: "Topic", width: 200 },
-    { field: "amount", headerName: "Amount ($)", width: 150 },
+   
   ];
 
   useEffect(() => {
@@ -31,17 +30,15 @@ const BidsPage = () => {
     // For demonstration, let's add a dummy order
     const newOrder = {
       id: rows.length + 1,
-      date: new Date().toISOString().split("T")[0],
-      item: `Item ${rows.length + 1}`,
-      customer: `Customer ${String.fromCharCode(65 + rows.length)}`,
-      stats: `Stat ${rows.length + 1}`,
+      cpp:"",
+      discipline:"",
+      cost:"",
       deadline: new Date(Date.now() + 4 * 60 * 60 * 1000)
         .toISOString()
         .replace("T", " ")
         .substring(0, 16),
       pages: Math.floor(Math.random() * 100) + 1,
       topic: `Topic ${rows.length + 1}`,
-      amount: (Math.random() * 100).toFixed(2),
     };
     setRows([...rows, newOrder]);
   };

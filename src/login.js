@@ -1,24 +1,36 @@
 import React, { useState } from "react";
 import { Box, TextField, Button, Typography } from "@mui/material";
+import axios from 'axios';
 
 
-const users = [
-  { username: "admin", password: "password" },
-  { username: "user1", password: "password1" },
-  { username: "user2", password: "password2" },
-  // Add more users as needed
-];
+
 
 const Login = ({ onLogin }) => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = () => {
-    const user = users.find((user) => user.username === username && user.password === password);
-    if (user) {
-      onLogin(username);
-    } else {
-      alert("Invalid credentials");
+  const handleLogin = async () => {
+    try {
+      // Send the login credentials to the backend
+      const response = await axios.post(
+        "http://localhost:4000/auth/login",
+        { email, password },
+        { withCredentials: true } // Include cookies in the request
+      );
+
+      if (response.status === 200) {
+         // Clear any previous error
+        alert("Login successful!");
+
+        // Notify parent component if necessary
+        if (onLogin) onLogin();
+
+        // Redirect or update UI after successful login
+      }
+    } catch (err) {
+      // Display an error message if the login fails
+      console.error("Login failed:", err);
+      
     }
   };
 
@@ -36,9 +48,9 @@ const Login = ({ onLogin }) => {
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 5 }}>
       <Typography variant="h6" fontWeight="fontWeightBold" >Login</Typography>
       <TextField
-        label="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
+        label="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
         sx={{ mt: 2 }}
       />
       <TextField

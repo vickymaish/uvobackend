@@ -20,11 +20,9 @@ const App = () =>{
 
   
 
-  const handleLogin = (username) => {
+  const handleLogin = () => {
     setIsAuthenticated(true);
-    setLoggedInAccounts(loggedInAccounts.map(account => 
-      account.username === username ? { ...account, status: "active" } : account
-    ));
+
     navigate("/dashboard")
      
   };

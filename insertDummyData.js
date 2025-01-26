@@ -1,14 +1,6 @@
 const mongoose = require('mongoose');
 const Order = require('./models/order');
 
-mongoose.connect('mongodb://localhost:27017/uvotake')
-  .then(() => {
-    console.log('MongoDB connected');
-    insertNewDummyData();
-  })
-  .catch((error) => {
-    console.error('Error connecting to MongoDB:', error);
-  });
 
 const newDummyData = [
   {
@@ -83,13 +75,13 @@ const newDummyData = [
   },
 ];
 
-function insertNewDummyData() {
-  Order.insertMany(newDummyData)
-    .then(() => {
-      console.log('New dummy data inserted');
-      mongoose.connection.close();
-    })
-    .catch((error) => {
-      console.error('Error inserting new dummy data:', error);
-    });
-}
+// function insertNewDummyData() {
+//   Order.insertMany(newDummyData)
+//     .then(() => {
+//       console.log('New dummy data inserted');
+//       mongoose.connection.close();
+//     })
+//     .catch((error) => {
+//       console.error('Error inserting new dummy data:', error);
+//     });
+// }

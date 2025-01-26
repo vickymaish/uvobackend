@@ -86,6 +86,7 @@ const Dashboard = () => {
     setIsDashboardVisible((prev) => !prev);
   };
 
+  
   return (
     <div className="flex">
       {/* Sidebar/Dashboard */}

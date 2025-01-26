@@ -31,7 +31,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    axios.get('http://localhost:5000/api/orders')
+    axios.get('http://localhost:4000/api/orders')
       .then(response => {
         setOrders(response.data);
         calculateFulfillmentRate(response.data);
@@ -86,7 +86,7 @@ const Dashboard = () => {
     setIsDashboardVisible((prev) => !prev);
   };
 
-  
+
   return (
     <div className="flex">
       {/* Sidebar/Dashboard */}

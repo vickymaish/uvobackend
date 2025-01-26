@@ -12,13 +12,21 @@ const authorization = require("./routes/authentication");
 // Initialize the app
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
-app.use(express.json());
-app.use(cookieParser());
+const corsOptions = {
+  origin: "http://localhost:4001", // Replace with your frontend URL
+  methods: "GET,POST,PUT,DELETE,OPTIONS",
+  credentials: true, // Allow cookies or Authorization headers
+};
 
-app.use("/auth", validate, authorization);
+// Middleware
+app.use(cors(corsOptions));
+app.use(cookieParser());
+app.use(express.json());
+app.use(bodyParser.json());
+
+
+
+app.use("/auth", authorization);
 
 // Order routes
 

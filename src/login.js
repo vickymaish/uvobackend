@@ -15,7 +15,12 @@ const Login = ({ onLogin }) => {
       const response = await axios.post(
         "http://localhost:4000/auth/login",
         { email, password },
-        { withCredentials: true } // Include cookies in the request
+        { withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        } // Include cookies in the request
+        
       );
 
       if (response.status === 200) {

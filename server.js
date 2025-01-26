@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const Order = require("./models/order"); // Import the Order model
 const validate = require("./middleware/decodeJWT");
 const authorization = require("./routes/authentication");
+const logout = require("./routes/logout")
 
 // Initialize the app
 const app = express();
@@ -27,8 +28,10 @@ app.use(bodyParser.json());
 
 
 app.use("/auth", authorization);
+app.use("/auth", validate, logout)
 
 // Order routes
+
 
 // POST route to create a new order
 app.post("/api/orders", async (req, res) => {
@@ -42,6 +45,7 @@ app.post("/api/orders", async (req, res) => {
     res.status(400).json({ error: "Failed to create order" });
   }
 });
+
 
 // GET route to retrieve all orders
 app.get("/api/orders", async (req, res) => {

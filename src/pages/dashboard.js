@@ -67,16 +67,31 @@ const Dashboard = () => {
     );
   };
 
-  const handleLogout = (username) => {
-    setLoggedInAccounts(
-      loggedInAccounts.map((account) =>
-        account.username === username
-          ? { ...account, status: "inactive" }
-          : account
-      )
-    );
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      const response = await axios.post(
+        "http://localhost:4000/auth/logout", 
+        {}, 
+        {
+          withCredentials: true, 
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+  
+   
+      if (response.status === 200) {
+        console.log("Logout successful");
+        navigate("/login");
+      } else {
+        console.error("Logout failed:", response.data.message);
+      }
+    } catch (error) {
+      console.error("An error occurred during logout:", error.message);
+    }
   };
+  
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;

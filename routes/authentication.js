@@ -149,33 +149,33 @@ router.post("/sign-up", async (req, res) => {
     }
   });
   
-  router.post('/logout', async(req, res) => {
-      res.clearCookie('authToken', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', 
-        sameSite: 'strict',
-      });
-      res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', 
-        sameSite: 'strict',
-      });
+//   router.post('/logout', async(req, res) => {
+//       res.clearCookie('authToken', {
+//         httpOnly: true,
+//         secure: process.env.NODE_ENV === 'production', 
+//         sameSite: 'strict',
+//       });
+//       res.clearCookie('refreshToken', {
+//         httpOnly: true,
+//         secure: process.env.NODE_ENV === 'production', 
+//         sameSite: 'strict',
+//       });
 
-      let logoutDate =  new Date();
-
-
-      const findUser = await User.findById(req.user.id);
-      findUser.lastLogout =logoutDate
-    const fullName = `${findUser.firstName} ${findUser.lastName}`;
-    const subject = 'Logout Notification Alert';
-    const message = `${fullName},\n\n successfully logged out at ${logoutDate.toLocaleString()}.\n\n`;
-
-    await sendEmail(subject, message);
-    await findUser.save();
+//       let logoutDate =  new Date();
 
 
+//       const findUser = await User.findById(req.user.id);
+//       findUser.lastLogout =logoutDate
+//     const fullName = `${findUser.firstName} ${findUser.lastName}`;
+//     const subject = 'Logout Notification Alert';
+//     const message = `${fullName},\n\n successfully logged out at ${logoutDate.toLocaleString()}.\n\n`;
 
-      res.status(200).json({ message: 'Logged out successfully' });
-    });
+//     await sendEmail(subject, message);
+//     await findUser.save();
+
+
+
+//       res.status(200).json({ message: 'Logged out successfully' });
+//     });
   
   module.exports = router;

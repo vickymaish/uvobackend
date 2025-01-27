@@ -11,13 +11,23 @@
     "@mui/x-data-grid": "^7.23.3",
     "axios": "^1.7.9",
     "browserify-zlib": "^0.2.0",
+    "cheerio": "^1.0.0",
     "cors": "^2.8.5",
     "cra-template": "1.2.0",
     "crypto-browserify": "^3.12.1",
+    "dotenv": "^16.4.7",
+    "googleapis": "^144.0.0",
     "https-browserify": "^1.0.0",
     "mongoose": "^8.9.2",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.16",
+    "open": "^10.1.0",
     "os-browserify": "^0.3.0",
     "path-browserify": "^1.0.1",
+    "puppeteer": "^23.11.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-recaptcha-solver": "^1.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-icons": "^5.4.0",
@@ -55,5 +65,6 @@
   },
   "devDependencies": {
     "tailwindcss": "^3.4.17"
-  }
+  },
+  "type": "module"
 }

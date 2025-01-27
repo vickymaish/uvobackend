@@ -4,6 +4,9 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 
+// Import scrapeOrderDetails function from orderScraper.js
+const { scrapeOrderDetails } = require('./orderScraper'); 
+
 // Use the Puppeteer stealth plugin to avoid detection
 puppeteer.use(StealthPlugin());
 
@@ -17,8 +20,35 @@ const saveCookies = async (page, filePath) => {
     console.log('Cookies saved to', filePath);
 };
 
+    // Now go to the orders page
+    const ordersUrl = 'https://www.uvocorp.com/orders/available.html';
+    console.log(`Navigating to ${ordersUrl}...`);
+    await page.goto(ordersUrl, { waitUntil: 'domcontentloaded' });
+
+    // Scrape the order details from the orders page
+    const orders = await scrapeOrderDetails(page);  // Call the imported scrapeOrderDetails function
+    console.log('Scraped order details:', orders);
+
+    // Save order details to a JSON file
+    fs.writeFileSync('orders.json', JSON.stringify(orders, null, 2));
+    console.log('Order details saved to orders.json.');
+
+    // Optionally send an email with the scraped orders
+    if (orders.length > 0) {
+        for (const order of orders) {
+            const subject = `New Order Available: ${order.orderId}`;
+            const text = `Order ID: ${order.orderId}\nTopic Title: ${order.topicTitle}\nDiscipline: ${order.discipline}\nPages: ${order.pages}\nDeadline: ${order.deadline}\nCPP: ${order.cpp}\nCost: ${order.cost}`;
+            await sendEmail(subject, text);
+        }
+    } else {
+        console.log('No orders found.');
+    };
+
+ 
+
+
 // Function to send email
-const sendEmail = async (subject, text) => {
+const sendEmail = async (subject, text,loginEmail) => {
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -30,8 +60,8 @@ const sendEmail = async (subject, text) => {
     const mailOptions = {
         from: process.env.Email_User,
         to: process.env.EMAIL_TO,
-        subject: subject,
-        text: text,
+        subject: `New Order from ${loginEmail.split('@')[0]}: ${subject}`, // Include username in the subject
+        text: `Order Details:\n${text}\n\nSend to: ${loginEmail}`, // Include the respective LOGIN_EMAIL in the body
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
@@ -41,6 +71,8 @@ const sendEmail = async (subject, text) => {
         console.log(`Email sent successfully:`, info.response);
     });
 };
+
+
 
 // Function to scrape messages
 const scrapeMessages = async (page) => {
@@ -137,6 +169,8 @@ const retryScrapingMessages = async (page, retries = 10, delay = 5000) => {
         console.log('Saving cookies...');
         await saveCookies(page, './cookies.json');
 
+
+
         // Navigate to the messages page
         const messagesUrl = 'https://www.uvocorp.com/messages.html';
         console.log(`Navigating to ${messagesUrl}...`);
@@ -160,7 +194,7 @@ const retryScrapingMessages = async (page, retries = 10, delay = 5000) => {
             for (const message of messages) {
                 const subject = `New Message from ${message.sender}`;
                 const text = `Subject: ${message.subject}\nPreview: ${message.preview}\nTimestamp: ${message.timestamp}`;
-                await sendEmail(subject, text);
+                await sendEmail(subject, text, process.env.LOGIN_EMAIL);
             }
         } else {
             console.log('No messages found. Keeping the browser open for inspection.');
@@ -176,3 +210,15 @@ const retryScrapingMessages = async (page, retries = 10, delay = 5000) => {
         }
     }
 })();
+
+// Function to repeatedly scrape every few seconds
+const startScrapingLoop = (intervalMs) => {
+    setInterval(async () => {
+        console.log('Starting new scrape...');
+        await scrapeAndNotify();  // Run the scraper
+    }, intervalMs);
+};
+
+// Start the scraping loop (e.g., scrape every 5 seconds)
+const scrapeInterval = 5000;  // 5000ms = 5 seconds
+startScrapingLoop(scrapeInterval);

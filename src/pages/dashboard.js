@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from 'axios';
 import Login from "../login";
 
 import MenuIcon from "@mui/icons-material/Menu";
@@ -10,7 +11,6 @@ import { MdAccountCircle } from "react-icons/md";
 import { IoIosSettings } from "react-icons/io";
 import Gauge from "../components/gauge";
 import BasicLineChart from "../components/linechart";
-import TickBar from "../components/bars";
 import BasicTable from "../components/bars";
 
 const accounts = [
@@ -22,11 +22,39 @@ const accounts = [
 
 const Dashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
   const [loggedInAccounts, setLoggedInAccounts] = useState(accounts);
   const [isDashboardVisible, setIsDashboardVisible] = useState(true);
+  const [orders, setOrders] = useState([]);
+  const [fulfillmentRate, setFulfillmentRate] = useState(0);
+  const [earnings, setEarnings] = useState(0);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    axios.get('http://localhost:4000/api/orders')
+      .then(response => {
+        setOrders(response.data);
+        calculateFulfillmentRate(response.data);
+        calculateEarnings(response.data);
+      })
+      .catch(error => {
+        console.error('Error fetching data:', error);
+      });
+  }, []);
+
+  const calculateFulfillmentRate = (orders) => {
+    const totalOrders = orders.length;
+    const completedOrders = orders.filter(order => order.status === 'Completed').length;
+    const rate = totalOrders > 0 ? (completedOrders / totalOrders) * 100 : 0;
+    setFulfillmentRate(rate);
+  };
+
+  const calculateEarnings = (orders) => {
+    const totalEarnings = orders
+      .filter(order => order.status === 'Completed')
+      .reduce((sum, order) => sum + order.totalPrice, 0);
+    setEarnings(totalEarnings);
+  };
 
   const handleLogin = (username) => {
     setIsAuthenticated(true);
@@ -39,16 +67,31 @@ const Dashboard = () => {
     );
   };
 
-  const handleLogout = (username) => {
-    setLoggedInAccounts(
-      loggedInAccounts.map((account) =>
-        account.username === username
-          ? { ...account, status: "inactive" }
-          : account
-      )
-    );
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      const response = await axios.post(
+        "http://localhost:4000/auth/logout", 
+        {}, 
+        {
+          withCredentials: true, 
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+  
+   
+      if (response.status === 200) {
+        console.log("Logout successful");
+        navigate("/login");
+      } else {
+        console.error("Logout failed:", response.data.message);
+      }
+    } catch (error) {
+      console.error("An error occurred during logout:", error.message);
+    }
   };
+  
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
@@ -57,6 +100,7 @@ const Dashboard = () => {
   const toggleDashboard = () => {
     setIsDashboardVisible((prev) => !prev);
   };
+
 
   return (
     <div className="flex">
@@ -121,9 +165,9 @@ const Dashboard = () => {
         <div className="border bg-white h-[90%] w-[98%] ml-4 px-4 mt-7 rounded-lg shadow-2xl ">
           <div className="border mt-4 flex flex-row gap-4 p-4 h-[280px]">
             <div className="border rounded-lg h-[200px] w-1/3 grid place-content-center">
-              <p>Order fullfilment rate</p>
-              <Gauge />
-              <p className="text-center text-lg">80%</p>
+              <p>Order fulfillment rate</p>
+              <Gauge value={fulfillmentRate} />
+              <p className="text-center text-lg">{fulfillmentRate.toFixed(2)}%</p>
             </div>
             <div className="border rounded-lg h-[200px] w-2/3 ">
               <p className="text-center">Orders received today</p>
@@ -138,7 +182,7 @@ const Dashboard = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-xs text-stone-600">Earnings</p>
-                  <p>4899Ksh</p>
+                  <p>{earnings} USD</p>
                 </div>
               </div>
               <div className="border h-[80px] p-4 w-1/2 flex flex-row rounded-lg ">
@@ -147,7 +191,7 @@ const Dashboard = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-xs text-stone-600">Orders not Taken</p>
-                  <p>89Ksh</p>
+                  <p>89USD</p>
                 </div>
               </div>
             </div>

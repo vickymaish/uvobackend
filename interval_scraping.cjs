@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 
 const Order = require('./models/order.cjs'); // Import the existing Order model
 
-// Use the Puppeteer stealth plugin to avoid detection
+// Use the Puppeteer stealth plugin to avoid detection and lets see 
 puppeteer.use(StealthPlugin());
 
 // Helper function for random delays

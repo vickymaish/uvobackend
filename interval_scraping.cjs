@@ -1,4 +1,5 @@
 require('dotenv').config();
+const express = require('express');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const nodemailer = require('nodemailer');
@@ -33,7 +34,7 @@ const sendEmail = async (subject, text, loginEmail, order) => {
     const mailOptions = {
         from: `"Uvotake" <${process.env.Email_User}>`,
         to: process.env.EMAIL_TO.trim(),
-        subject: `New Bid from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,
+        subject: `New Order from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,
         html: `
             <!DOCTYPE html>
             <html>
@@ -160,6 +161,91 @@ const sendEmail = async (subject, text, loginEmail, order) => {
     });
 };
 
+const checkLoginStatus = async (page, retries = 3) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            console.log(`Checking login status (attempt ${attempt}/${retries})...`);
+            await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
+            await page.waitForSelector('button[data-toggle="collapse"][data-target=".header--nav__link-profile-nav"]', { timeout: 10000 });
+            await page.click('button[data-toggle="collapse"][data-target=".header--nav__link-profile-nav"]');
+            await page.waitForSelector('.header--nav__link-profile-nav.show', { timeout: 10000 });
+
+            const isLoggedIn = await page.evaluate(() => {
+                const logoutLink = document.querySelector('.header--nav__link-profile-nav.show a[href="/logout"]');
+                return logoutLink !== null;
+            });
+
+            return isLoggedIn; // True if logged in
+        } catch (error) {
+            console.error(`Error checking login status on attempt ${attempt}:`, error.message);
+            if (attempt === retries) return false; // Assume logged out after all retries fail
+        }
+    }
+};
+
+
+const loginEmail = process.env.LOGIN_EMAIL;
+
+// Function to send a logout notification
+const sendLogoutNotification = async () => {
+    const subject = `Account Logged Out: ${loginEmail}`;
+    const text = `The account ${loginEmail} has been logged out. Please log in again.`;
+    await sendEmail(subject, text, loginEmail, {});
+};
+
+// Function to log in again
+// const loginAgain = async (page) => {
+//     const retries = 3;
+//     for (let attempt = 1; attempt <= retries; attempt++) {
+//         try {
+//             console.log(`Attempting to log in again (attempt ${attempt}/${retries})...`);
+//             await page.goto('https://www.uvocorp.com/login.html', { waitUntil: 'domcontentloaded' });
+
+//             await page.type(process.env.LOGIN_EMAIL_SELECTOR, process.env.LOGIN_EMAIL, { delay: 100 });
+//             await page.type(process.env.LOGIN_PASSWORD_SELECTOR, process.env.LOGIN_PASSWORD, { delay: 100 });
+//             await page.click(process.env.LOGIN_BUTTON_SELECTOR);
+
+//             await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+//             console.log('Logged in successfully.');
+//             return true; // Login succeeded
+//         } catch (error) {
+//             console.error(`Error logging in again on attempt ${attempt}:`, error.message);
+//             if (attempt < retries) {
+//                 const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
+//                 console.log(`Retrying in ${delay / 1000} seconds...`);
+//                 await new Promise(resolve => setTimeout(resolve, delay));
+//             } else {
+//                 console.error('Failed to log in after multiple attempts.');
+//                 return false; // Login failed
+//             }
+//         }
+//     }
+// };
+
+
+// Modify the interval to include login status check
+// setInterval(async () => {
+//     try {
+//         console.log('Starting a new scrape cycle...');
+        
+//         const isLoggedIn = await checkLoginStatus(page);
+//         if (!isLoggedIn) {
+//             console.log('Account is logged out. Sending notification and attempting to log in again...');
+//             await sendLogoutNotification();
+//             const loginSuccess = await loginAgain(page);
+//             if (!loginSuccess) {
+//                 console.log('Skipping this scrape cycle due to failed login.');
+//                 return;
+//             }
+//         }
+
+//         console.log('Account is still logged in. Checking for new orders...');
+//         await checkForNewOrders(page);
+//     } catch (error) {
+//         console.error('Error during scrape cycle:', error.message);
+//     }
+// }, 60000); // Check every 60 seconds
+
 // Function to scrape individual order page
 const scrapeOrderPage = async (page) => {
     // Extract details from the individual order page
@@ -197,10 +283,16 @@ const scrapeOrderPage = async (page) => {
 // Function to scrape orders from the main page
 const scrapeOrders = async (page) => {
     console.log('Scraping orders from the main page...');
-
+    
     // Locate all orders on the main page
     const orders = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
+            // Check for the revision class <i class="revision"></i>
+            if (orderElement.querySelector('i.revision')) {
+                console.log('Skipping revision order...');
+                return null; 
+            }
+
             const orderId = orderElement.getAttribute('data-order_id');
             const topicTitle = orderElement.querySelector('.title-order')?.textContent.trim() || 'N/A';
             const discipline = orderElement.querySelector('.discipline-order')?.textContent.trim() || 'N/A';
@@ -223,14 +315,22 @@ const scrapeOrders = async (page) => {
                 cpp,
                 bid,
                 href,
+                isRevision: orderElement.querySelector('i.revision') !== null // Mark if order is a revision
             };
-        });
+        }).filter(order => order !== null); 
     });
 
-    // Iterate over each order to navigate and scrape details
     for (const order of orders) {
+        if (order.isRevision) {
+            console.log(`Skipping revision order with ID: ${order.OrderId}`);
+            continue;  // Skip revision orders
+        }
+
         console.log(`Navigating to order page: ${order.href}`);
         await page.goto(order.href, { waitUntil: 'domcontentloaded' });
+        
+        // Ensure the page is fully loaded before scraping
+        await page.waitForSelector('.order-details');  // Wait for an element that indicates the page is loaded
 
         console.log('Scraping individual order page...');
         const details = await scrapeOrderPage(page);
@@ -246,6 +346,8 @@ const scrapeOrders = async (page) => {
 
     return orders;
 };
+
+
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URIlocal, {
@@ -277,7 +379,7 @@ const checkForNewOrders = async (page) => {
 
         // Send emails
         for (const order of orders) {
-            const subject = `New Bid Uvotake ${loginEmail.split('@')[0]}: ${order.OrderId}`;
+            const subject = `New Order Uvotake ${loginEmail.split('@')[0]}: ${order.OrderId}`;
             const text = `Order ID: ${order.OrderId}\nTopic Title: ${order.topicTitle}\nDiscipline: ${order.discipline}\nPages: ${order.pages}\nDeadline: ${order.deadline}\nCPP: ${order.cpp}\nCost: ${order.cost}`;
             await sendEmail(subject, text, loginEmail, order);
         }
@@ -285,7 +387,10 @@ const checkForNewOrders = async (page) => {
         console.log('No new orders found.');
     }
 };
-
+// Using dedlay promise in clicking enter using puppeteer
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 (async () => {
     const browser = await puppeteer.launch({
         headless: false,
@@ -340,9 +445,15 @@ const checkForNewOrders = async (page) => {
         console.log('Typing password...');
         await page.type(loginPasswordSelector, process.env.LOGIN_PASSWORD, { delay: randomDelay(150, 250) });
 
-        console.log('Clicking login button...');
-        await page.waitForSelector(loginButtonSelector);
-        await page.click(loginButtonSelector);
+        // console.log('Clicking login button...');
+        // await page.waitForSelector(loginButtonSelector);
+        // await page.click(loginButtonSelector);
+
+        console.log('Waiting for 5-10 seconds before pressing Enter...');
+        await delay (5000 + Math.floor(Math.random() * 5000));
+
+        console.log('Pressing Enter to submit the form...');
+        await page.keyboard.press('Enter'); // Simulate pressing the Enter key
 
         console.log('Waiting for you to manually solve the CAPTCHA and log in...');
         await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 0 });
@@ -353,7 +464,7 @@ const checkForNewOrders = async (page) => {
         setInterval(async () => {
             console.log('Starting a new scrape cycle...');
             await checkForNewOrders(page);
-        }, 300); // 2 seconds
+        }, 500); // 1 seconds
 
     } catch (error) {
         console.error('Error during execution:', error.message);

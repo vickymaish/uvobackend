@@ -1,14 +1,22 @@
-require("dotenv").config();
+import express from 'express';
+import bodyParser from 'body-parser';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import fs from 'fs';
+import { google } from 'googleapis';
+import nodemailer from 'nodemailer';
+import path from 'path';
+import open from 'open';
+import Order from './models/order.cjs'; // Same model for both orders and bids
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
-const express = require("express");
-const bodyParser = require("body-parser");
-const cookieParser = require("cookie-parser");
-const cors = require("cors");
-const mongoose = require("mongoose");
-const Order = require("./models/order"); // Import the Order model
-const validate = require("./middleware/decodeJWT");
-const authorization = require("./routes/authentication");
-const logout = require("./routes/logout")
+// Load environment variables from .env file
+dotenv.config();
+
+// Fix for `__dirname` in ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize the app
 const app = express();
@@ -25,35 +33,52 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(bodyParser.json());
 
+// Log the MONGO_URI to check if it's being read correctly
+console.log('MONGO_URI:', process.env.MONGO_URI);
 
-
-app.use("/auth", authorization);
-app.use("/auth", validate, logout)
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI.trim(), { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch((err) => console.error('Error connecting to MongoDB:', err));
 
 // Order routes
 
 
-// POST route to create a new order
-app.post("/api/orders", async (req, res) => {
+// POST route to create a new order or bid
+app.post('/api/orders', async (req, res) => {
   try {
-    const { customerName, items, totalPrice } = req.body;
-    const newOrder = new Order({ customerName, items, totalPrice });
+    const { orderId, topicTitle, discipline, academicLevel, deadline, pages, cost, bid, href } = req.body;
+    const newOrder = new Order({ orderId, topicTitle, discipline, academicLevel, deadline, pages, cost, bid, href });
 
     await newOrder.save();
     res.status(201).json(newOrder);
   } catch (err) {
-    res.status(400).json({ error: "Failed to create order" });
+    console.error('Error creating order/bid:', err);
+    res.status(400).json({ error: 'Failed to create order/bid' });
   }
 });
 
 
-// GET route to retrieve all orders
-app.get("/api/orders", async (req, res) => {
+// GET route to retrieve all orders or bids
+app.get('/api/orders', async (req, res) => {
   try {
     const orders = await Order.find();
     res.status(200).json(orders);
   } catch (err) {
-    res.status(500).json({ error: "Failed to retrieve orders" });
+    console.error('Error retrieving orders/bids:', err);
+    res.status(500).json({ error: 'Failed to retrieve orders/bids' });
+  }
+});
+
+// GET route to retrieve orders or bids by orderId
+app.get('/api/orders/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const orders = await Order.find({ orderId });
+    res.status(200).json(orders);
+  } catch (err) {
+    console.error('Error retrieving orders/bids for orderId:', err);
+    res.status(500).json({ error: 'Failed to retrieve orders/bids for the order' });
   }
 });
 

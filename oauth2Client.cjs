@@ -1,6 +1,9 @@
 import { google } from 'googleapis';
 import fs from 'fs';
 import readline from 'readline';
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+const puppeteer = require('puppeteer');
 
 // Load client secrets from a local file
 const credentials = JSON.parse(fs.readFileSync('credentials.json'));

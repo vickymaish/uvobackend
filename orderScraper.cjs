@@ -1,22 +1,34 @@
-// orderScraper.js
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const fs = require('fs');
-
 
 puppeteer.use(StealthPlugin());
 
-// Function to scrape order details
 const scrapeOrderDetails = async (page) => {
-    const orders = await page.$$eval('li.id-order.sortable', (orderElements) => {
-        return orderElements.map((el) => {
-            const orderId = el.textContent.trim();
-            const topicTitle = el.closest('div').querySelector('.title-order')?.textContent.trim() || 'No Topic Title';
-            const discipline = el.closest('div').querySelector('.discipline_academic-order')?.textContent.trim() || 'No Discipline';
-            const pages = el.closest('div').querySelector('.pages-order.center.sortable')?.textContent.trim() || 'No Pages';
-            const deadline = el.closest('div').querySelector('.time-order.center.sortable')?.textContent.trim() || 'No Deadline';
-            const cpp = el.closest('div').querySelector('.cpp-order.center.sortable')?.textContent.trim() || 'No CPP';
-            const cost = el.closest('div').querySelector('.cost-order.center')?.textContent.trim() || 'No Cost';
+    // Wait for the table to load
+    await page.waitForSelector('div.table-order', { timeout: 10000 });
+
+    // Check if there are any orders to display
+    const hasOrders = await page.$eval('div.table-order .no-orders', (noOrdersDiv) => {
+        return noOrdersDiv.textContent.includes('There are currently no orders to display.') === false;
+    });
+
+    if (!hasOrders) {
+        console.log('No orders to scrape. The table is empty.');
+        return [];
+    }
+
+    // Scrape order rows
+    const orders = await page.$$eval('div.table-order .tbody ul:not(.table-header)', (rows) =>
+        rows.map((row) => {
+            const orderId = row.querySelector('li.id-order .id-number-order')?.textContent.trim() || 'No Order ID';
+            const topicTitle = row.querySelector('li.title-order')?.textContent.trim() || 'No Topic Title';
+            const discipline = row.querySelector('li.discipline_academic-order')?.textContent.trim() || 'No Discipline';
+            const pages = row.querySelector('li.pages-order')?.textContent.trim() || 'No Pages';
+            const deadline = row.querySelector('li.time-order')?.textContent.trim() || 'No Deadline';
+            const cpp = row.querySelector('li.cpp-order')?.textContent.trim() || 'No CPP';
+            const cost = row.querySelector('li.cost-order')?.textContent.trim() || 'No Cost';
+            const link = row.querySelector('a.order-link')?.getAttribute('href') || null;
+            const orderStatus = row.querySelector('li.id-type-order div.id-type-order')?.textContent.trim() || 'Unknown Status';
 
             return {
                 orderId,
@@ -25,12 +37,36 @@ const scrapeOrderDetails = async (page) => {
                 pages,
                 deadline,
                 cpp,
-                cost
+                cost,
+                orderStatus, // New field for status
+                link,
             };
-        });
-    });
+        })
+    );
+
+    // Collect additional data by navigating to each order link
+    for (let order of orders) {
+        if (order.link) {
+            try {
+                console.log(`Navigating to order details page: ${order.link}`);
+                const orderPage = await page.browser().newPage();
+                await orderPage.goto(`https://www.uvocorp.com${order.link}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+                // Extract additional details (example: notes, attached files, etc.)
+                order.details = await orderPage.evaluate(() => {
+                    const details = document.querySelector('.order-details')?.textContent.trim() || 'No Details';
+                    const attachedFiles = [...document.querySelectorAll('.file-link')].map((file) => file.textContent.trim()) || [];
+                    return { details, attachedFiles };
+                });
+
+                await orderPage.close();
+            } catch (error) {
+                console.error(`Failed to scrape additional data for order ${order.orderId}:`, error.message);
+            }
+        }
+    }
+
     return orders;
 };
 
-// Export the function to be used elsewhere
 module.exports = { scrapeOrderDetails };

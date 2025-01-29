@@ -2,14 +2,13 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import fs from 'fs';
+import cookieParser from 'cookie-parser'; // Import cookie parser
 import { google } from 'googleapis';
 import nodemailer from 'nodemailer';
 import path from 'path';
-import open from 'open';
+import dotenv from 'dotenv';
 import Order from './models/order.cjs'; // Same model for both orders and bids
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -33,23 +32,17 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(bodyParser.json());
 
-// Log the MONGO_URIlocal to check if it's being read correctly
-console.log('MONGO_URIlocal:', process.env.MONGO_URIlocal);
-
 // MongoDB connection
+console.log('MONGO_URIlocal:', process.env.MONGO_URIlocal);
 mongoose.connect(process.env.MONGO_URIlocal.trim(), { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('Error connecting to MongoDB:', err));
-
-// Order routes
-
 
 // POST route to create a new order or bid
 app.post('/api/orders', async (req, res) => {
   try {
     const { orderId, topicTitle, discipline, academicLevel, deadline, pages, cost, bid, href } = req.body;
     const newOrder = new Order({ orderId, topicTitle, discipline, academicLevel, deadline, pages, cost, bid, href });
-
     await newOrder.save();
     res.status(201).json(newOrder);
   } catch (err) {
@@ -57,7 +50,6 @@ app.post('/api/orders', async (req, res) => {
     res.status(400).json({ error: 'Failed to create order/bid' });
   }
 });
-
 
 // GET route to retrieve all orders or bids
 app.get('/api/orders', async (req, res) => {
@@ -83,14 +75,6 @@ app.get('/api/orders/:orderId', async (req, res) => {
 });
 
 // Start the server
-mongoose
-  .connect(process.env.DATABASE_URI)
-  .then(() => {
-    app.listen(process.env.PORT, (req, res) => {
-      console.log(req);
-      console.log("Connected to db & listening on port 4000");
-    });
-  })
-  .catch((err) => {
-    console.error("error:", err);
-  });
+app.listen(process.env.PORT || 4000, () => {
+  console.log("Connected to db & listening on port", process.env.PORT || 4000);
+});

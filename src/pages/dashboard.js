@@ -31,7 +31,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    axios.get('http://localhost:5000/api/orders')
+    axios.get('http://localhost:4000/api/orders')
       .then(response => {
         setOrders(response.data);
         calculateFulfillmentRate(response.data);
@@ -67,16 +67,31 @@ const Dashboard = () => {
     );
   };
 
-  const handleLogout = (username) => {
-    setLoggedInAccounts(
-      loggedInAccounts.map((account) =>
-        account.username === username
-          ? { ...account, status: "inactive" }
-          : account
-      )
-    );
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      const response = await axios.post(
+        "http://localhost:4000/auth/logout", 
+        {}, 
+        {
+          withCredentials: true, 
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+  
+   
+      if (response.status === 200) {
+        console.log("Logout successful");
+        navigate("/login");
+      } else {
+        console.error("Logout failed:", response.data.message);
+      }
+    } catch (error) {
+      console.error("An error occurred during logout:", error.message);
+    }
   };
+  
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
@@ -85,6 +100,7 @@ const Dashboard = () => {
   const toggleDashboard = () => {
     setIsDashboardVisible((prev) => !prev);
   };
+
 
   return (
     <div className="flex">

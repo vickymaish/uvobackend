@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Login from "../login";
+import { CiLock } from "react-icons/ci";
 
 import MenuIcon from "@mui/icons-material/Menu";
 
@@ -64,7 +65,9 @@ const Sidebar = () => {
             <p>Bids</p>
             </div>
 
-            <div className="flex flex-row items-center gap-2 cursor-pointer">
+            <div
+            onClick={()=> navigate('/profile')}
+            className="flex flex-row items-center gap-2 cursor-pointer">
             <MdAccountCircle />
             <p>Account</p>
             </div>
@@ -72,6 +75,7 @@ const Sidebar = () => {
            <div className="flex flex-row items-center gap-2 cursor-pointer">
            <IoIosSettings />
            <p>Settings</p>
+           <CiLock />
            </div>
            
           </div>

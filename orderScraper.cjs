@@ -28,8 +28,7 @@ const scrapeOrderDetails = async (page) => {
             const cpp = row.querySelector('li.cpp-order')?.textContent.trim() || 'No CPP';
             const cost = row.querySelector('li.cost-order')?.textContent.trim() || 'No Cost';
             const link = row.querySelector('a.order-link')?.getAttribute('href') || null;
-            const orderStatus = row.querySelector('li.id-type-order div.id-type-order')?.textContent.trim() || 'Unknown Status';
-
+            
             return {
                 orderId,
                 topicTitle,
@@ -38,7 +37,6 @@ const scrapeOrderDetails = async (page) => {
                 deadline,
                 cpp,
                 cost,
-                orderStatus, // New field for status
                 link,
             };
         })
@@ -50,7 +48,7 @@ const scrapeOrderDetails = async (page) => {
             try {
                 console.log(`Navigating to order details page: ${order.link}`);
                 const orderPage = await page.browser().newPage();
-                await orderPage.goto(`https://www.uvocorp.com${order.link}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                await orderPage.goto(`https://www.uvocorp.com${order.link}`, { waitUntil: 'domcontentloaded', timeout: 20000 });
 
                 // Extract additional details (example: notes, attached files, etc.)
                 order.details = await orderPage.evaluate(() => {

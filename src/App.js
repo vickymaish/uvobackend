@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route,Navigate } from 'react-router-dom'
 import { useNavigate } from "react-router-dom";
 import Dashboard from './pages/dashboard'
 import BidsPage from './pages/bids'
 import Login from "./login";
+import AccountsPage from './pages/accountsPage';
 
 const App = () =>{
   const accounts = [
@@ -19,11 +20,9 @@ const App = () =>{
 
   
 
-  const handleLogin = (username) => {
+  const handleLogin = () => {
     setIsAuthenticated(true);
-    setLoggedInAccounts(loggedInAccounts.map(account => 
-      account.username === username ? { ...account, status: "active" } : account
-    ));
+
     navigate("/dashboard")
      
   };
@@ -40,7 +39,7 @@ const App = () =>{
             path="/login"
             element={<Login onLogin={handleLogin} />}
           />
-          <Route path="*" element={<p>Unauthorized access, please log in.</p>} />
+           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
   
     );
@@ -54,7 +53,7 @@ const App = () =>{
       <Routes>
         <Route path='/dashboard' element={<Dashboard />} />
         <Route path='/bids' element={<BidsPage />} />
-
+        <Route path='/profile' element={<AccountsPage />} />
       </Routes>
       
      

@@ -21,8 +21,16 @@ const __dirname = path.dirname(__filename);
 // Initialize the app
 const app = express();
 
+const corsOptions = {
+  origin: "http://localhost:4001", // Replace with your frontend URL
+  methods: "GET,POST,PUT,DELETE,OPTIONS",
+  credentials: true, // Allow cookies or Authorization headers
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
+app.use(cookieParser());
+app.use(express.json());
 app.use(bodyParser.json());
 
 // Log the MONGO_URIlocal to check if it's being read correctly
@@ -34,6 +42,7 @@ mongoose.connect(process.env.MONGO_URIlocal.trim(), { useNewUrlParser: true, use
   .catch((err) => console.error('Error connecting to MongoDB:', err));
 
 // Order routes
+
 
 // POST route to create a new order or bid
 app.post('/api/orders', async (req, res) => {
@@ -48,6 +57,7 @@ app.post('/api/orders', async (req, res) => {
     res.status(400).json({ error: 'Failed to create order/bid' });
   }
 });
+
 
 // GET route to retrieve all orders or bids
 app.get('/api/orders', async (req, res) => {
@@ -73,7 +83,14 @@ app.get('/api/orders/:orderId', async (req, res) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+mongoose
+  .connect(process.env.DATABASE_URI)
+  .then(() => {
+    app.listen(process.env.PORT, (req, res) => {
+      console.log(req);
+      console.log("Connected to db & listening on port 4000");
+    });
+  })
+  .catch((err) => {
+    console.error("error:", err);
+  });

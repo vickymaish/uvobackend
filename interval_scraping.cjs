@@ -5,8 +5,12 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const mongoose = require('mongoose');
-
+const path= require('path')
 const Order = require('./models/order.cjs'); // Import the existing Order model
+// Import scrapeOrderDetails function from orderScraper.js
+const { scrapeOrderDetails } = require('./orderScraper.cjs'); 
+const { takeScreenshot, sendScreenshotEmail } = require('./screenshot.cjs');
+
 
 // Use the Puppeteer stealth plugin to avoid detection and lets see 
 puppeteer.use(StealthPlugin());
@@ -137,10 +141,7 @@ const sendEmail = async (subject, text, loginEmail, order) => {
                                     <th>Bid</th>
                                     <td>${order.bid || 'N/A'}</td>
                                 </tr>
-                                <tr>
-                                    <th>Link</th>
-                                    <td>${order.href || 'N/A'}</td>
-                                </tr>
+                                
                             </table>
                             <p class="quote">${text}</p>
                         </div>
@@ -161,124 +162,46 @@ const sendEmail = async (subject, text, loginEmail, order) => {
     });
 };
 
-const checkLoginStatus = async (page, retries = 3) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            console.log(`Checking login status (attempt ${attempt}/${retries})...`);
-            await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
-            await page.waitForSelector('button[data-toggle="collapse"][data-target=".header--nav__link-profile-nav"]', { timeout: 10000 });
-            await page.click('button[data-toggle="collapse"][data-target=".header--nav__link-profile-nav"]');
-            await page.waitForSelector('.header--nav__link-profile-nav.show', { timeout: 10000 });
-
-            const isLoggedIn = await page.evaluate(() => {
-                const logoutLink = document.querySelector('.header--nav__link-profile-nav.show a[href="/logout"]');
-                return logoutLink !== null;
-            });
-
-            return isLoggedIn; // True if logged in
-        } catch (error) {
-            console.error(`Error checking login status on attempt ${attempt}:`, error.message);
-            if (attempt === retries) return false; // Assume logged out after all retries fail
-        }
-    }
-};
-
-
-const loginEmail = process.env.LOGIN_EMAIL;
-
-// Function to send a logout notification
-const sendLogoutNotification = async () => {
-    const subject = `Account Logged Out: ${loginEmail}`;
-    const text = `The account ${loginEmail} has been logged out. Please log in again.`;
-    await sendEmail(subject, text, loginEmail, {});
-};
-
-// Function to log in again
-// const loginAgain = async (page) => {
-//     const retries = 3;
-//     for (let attempt = 1; attempt <= retries; attempt++) {
-//         try {
-//             console.log(`Attempting to log in again (attempt ${attempt}/${retries})...`);
-//             await page.goto('https://www.uvocorp.com/login.html', { waitUntil: 'domcontentloaded' });
-
-//             await page.type(process.env.LOGIN_EMAIL_SELECTOR, process.env.LOGIN_EMAIL, { delay: 100 });
-//             await page.type(process.env.LOGIN_PASSWORD_SELECTOR, process.env.LOGIN_PASSWORD, { delay: 100 });
-//             await page.click(process.env.LOGIN_BUTTON_SELECTOR);
-
-//             await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-//             console.log('Logged in successfully.');
-//             return true; // Login succeeded
-//         } catch (error) {
-//             console.error(`Error logging in again on attempt ${attempt}:`, error.message);
-//             if (attempt < retries) {
-//                 const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-//                 console.log(`Retrying in ${delay / 1000} seconds...`);
-//                 await new Promise(resolve => setTimeout(resolve, delay));
-//             } else {
-//                 console.error('Failed to log in after multiple attempts.');
-//                 return false; // Login failed
-//             }
-//         }
-//     }
-// };
-
-
-// Modify the interval to include login status check
-// setInterval(async () => {
-//     try {
-//         console.log('Starting a new scrape cycle...');
-        
-//         const isLoggedIn = await checkLoginStatus(page);
-//         if (!isLoggedIn) {
-//             console.log('Account is logged out. Sending notification and attempting to log in again...');
-//             await sendLogoutNotification();
-//             const loginSuccess = await loginAgain(page);
-//             if (!loginSuccess) {
-//                 console.log('Skipping this scrape cycle due to failed login.');
-//                 return;
-//             }
-//         }
-
-//         console.log('Account is still logged in. Checking for new orders...');
-//         await checkForNewOrders(page);
-//     } catch (error) {
-//         console.error('Error during scrape cycle:', error.message);
-//     }
-// }, 60000); // Check every 60 seconds
-
-// Function to scrape individual order page
-const scrapeOrderPage = async (page) => {
-    // Extract details from the individual order page
-    const details = await page.evaluate(() => {
-        const title = document.querySelector('.tooltip-title-order')?.textContent.trim() || 'N/A';
-        const instructions = document.querySelector('.tooltip-instruction-order')?.textContent.trim() || 'N/A';
-        const attachedFiles = document.querySelector('.tooltip-files-order')?.textContent.trim() || 'N/A';
-
-        return { title, instructions, attachedFiles };
-    });
-
-    // Click the "Take Order" button
+// Function to click the "Take Order" button
+const clickTakeOrderButton = async (page) => {
     try {
-        const takeOrderSelector = 'input.button.button--1[type="submit"][value="Take Order"]';
+        const takeOrderSelector = process.env.TAKE_ORDER_SELECTOR;  // Use the selector from .env
+        const placeBidSelector = process.env.PLACE_BID_SELECTOR; // Add the selector for the Place Bid button
 
-        console.log('Waiting for the "Take Order" button...');
-        await page.waitForSelector(takeOrderSelector, { timeout: 10000 });
+        console.log('Waiting for the button to load...');
 
+        // Wait for either the "Take Order" or "Place Bid" button to appear
+        await page.waitForSelector(takeOrderSelector, { timeout: 10000 }).catch(() => null); // Try "Take Order" first
+        await page.waitForSelector(placeBidSelector, { timeout: 10000 }).catch(() => null); // If not found, try "Place Bid"
+
+        // Check if the "Place Bid" button exists (skip if found)
+        const placeBidButton = await page.$(placeBidSelector);
+        if (placeBidButton) {
+            console.log('Found "Place Bid" button, skipping...');
+            return;  // Skip clicking if the "Place Bid" button is found
+        }
+
+        // If "Place Bid" isn't found, proceed with "Take Order"
         const takeOrderButton = await page.$(takeOrderSelector);
-
         if (takeOrderButton) {
-            console.log('Clicking the "Take Order" button...');
-            await page.click(takeOrderSelector);
-            console.log('"Take Order" button clicked successfully.');
+            // Check if the "Take Order" button is clickable
+            const buttonText = await page.evaluate(button => button.textContent, takeOrderButton);
+            if (buttonText.trim() === 'Take Order') {
+                console.log('Clicking the "Take Order" button...');
+                await takeOrderButton.click();
+                console.log('"Take Order" button clicked successfully.');
+            } else {
+                console.log('The button is not labeled as "Take Order".');
+            }
         } else {
             console.log('No "Take Order" button found.');
         }
+
     } catch (error) {
         console.error('Error clicking the "Take Order" button:', error.message);
     }
-
-    return details;
 };
+
 
 // Function to scrape orders from the main page
 const scrapeOrders = async (page) => {
@@ -301,7 +224,7 @@ const scrapeOrders = async (page) => {
             const deadline = new Date(orderElement.querySelector('.time-order span')?.textContent.trim()) || 'N/A';
             const cpp = parseFloat(orderElement.querySelector('.cpp-order')?.textContent.trim()) || 0;
             const cost = parseFloat(orderElement.querySelector('.cost-order')?.textContent.trim()) || 0;
-            const bid = parseFloat(orderElement.querySelector('.bid-order')?.textContent.trim()) || 0;
+            //const bid = parseFloat(orderElement.querySelector('.bid-order')?.textContent.trim()) || 0;
             const href = `https://www.uvocorp.com/order/${orderId}.html`;
 
             return {
@@ -313,7 +236,7 @@ const scrapeOrders = async (page) => {
                 deadline,
                 cost,
                 cpp,
-                bid,
+                //bid,
                 href,
                 isRevision: orderElement.querySelector('i.revision') !== null // Mark if order is a revision
             };
@@ -332,13 +255,17 @@ const scrapeOrders = async (page) => {
         // Ensure the page is fully loaded before scraping
         await page.waitForSelector('.order-details');  // Wait for an element that indicates the page is loaded
 
-        console.log('Scraping individual order page...');
-        const details = await scrapeOrderPage(page);
+        console.log('Scraping individual TAKE ORDER  order page...');
+        const details = await scrapeOrderDetails(page);
         order.title = details.title;
         order.instructions = details.instructions;
         order.attachedFiles = details.attachedFiles;
 
         console.log(`Scraped order details:`, details);
+
+        // Call the function to click the "Take Order" button
+        await clickTakeOrderButton(page);  // Click the "Take Order" button after scraping the details
+
 
         // Optionally, navigate back to the main orders page
         await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
@@ -362,19 +289,25 @@ mongoose.connect(process.env.MONGO_URIlocal, {
 // Function to check for new orders and send notifications
 const checkForNewOrders = async (page) => {
     console.log('Checking for new orders...');
-
+    
     const orders = await scrapeOrders(page);
     console.log('Scraped order details:', orders);
 
+    const loginEmail = process.env.Email_User;  // Define loginEmail before using it
+    
     if (orders.length > 0) {
         fs.writeFileSync('orders_with_details.json', JSON.stringify(orders, null, 2));
         console.log('Order details saved to orders_with_details.json.');
 
         // Save orders to MongoDB
         for (const order of orders) {
-            const newOrder = new Order(order);
-            await newOrder.save();
-            console.log(`Order ${order.OrderId} saved to MongoDB.`);
+            try {
+                const newOrder = new Order(order);
+                await newOrder.save();
+                console.log(`Order ${order.OrderId} saved to MongoDB.`);
+            } catch (error) {
+                console.error(`Error saving order ${order.OrderId}:`, error.message);
+            }
         }
 
         // Send emails
@@ -385,8 +318,21 @@ const checkForNewOrders = async (page) => {
         }
     } else {
         console.log('No new orders found.');
+        // Wait for a few minutes before taking a screenshot
+        //await delay(3 * 60 * 1000); // 3 minutes delay
+        // Take a screenshot
+        // Dynamic path for screenshot
+        //const screenshotPath = path.join(__dirname, 'uvocorp_no_orders_screenshot.png');
+        //await takeScreenshot(page, screenshotPath);
+
+        // Send the screenshot email
+        //const subject = 'No New Orders Found - Screenshot';
+        //const loginEmail = process.env.Email_User;
+        //const text = 'No new orders were found after checking. Here is a screenshot of the page.';
+        //await sendScreenshotEmail(subject, text, loginEmail, screenshotPath);
     }
 };
+
 // Using dedlay promise in clicking enter using puppeteer
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -395,7 +341,7 @@ function delay(ms) {
     const browser = await puppeteer.launch({
         headless: false,
         executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
-        timeout: 200000,
+        timeout: 400000,
         slowMo: 10,
         args: [
             '--no-sandbox',
@@ -435,7 +381,7 @@ function delay(ms) {
         console.log('Waiting for login form...');
         const loginEmailSelector = process.env.LOGIN_EMAIL_SELECTOR;
         const loginPasswordSelector = process.env.LOGIN_PASSWORD_SELECTOR;
-        const loginButtonSelector = process.env.LOGIN_BUTTON_SELECTOR;
+        //const loginButtonSelector = process.env.LOGIN_BUTTON_SELECTOR;
 
         await page.waitForSelector(loginEmailSelector);
 
@@ -461,10 +407,25 @@ function delay(ms) {
         console.log('Saving cookies...');
         await saveCookies(page, './cookies.json');
 
+        let isScraping = false;  // Add a flag to track scraping status
+
         setInterval(async () => {
-            console.log('Starting a new scrape cycle...');
-            await checkForNewOrders(page);
-        }, 500); // 1 seconds
+            if (!isScraping) {  // Check if the scraping cycle is already running
+                isScraping = true;  // Set the flag to true to prevent overlapping cycles
+                console.log('Starting a new scrape cycle...');
+                
+                try {
+                    await checkForNewOrders(page);  // Scrape new orders
+                } catch (error) {
+                    console.error('Error during scrape cycle:', error.message);
+                }
+        
+                isScraping = false;  // Reset the flag when the cycle finishes
+            } else {
+                console.log('Waiting for the current scrape cycle to finish...');
+            }
+        }, 600);  // 600ms interval
+        
 
     } catch (error) {
         console.error('Error during execution:', error.message);

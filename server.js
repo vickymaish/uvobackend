@@ -25,11 +25,11 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Log the MONGO_URI to check if it's being read correctly
-console.log('MONGO_URI:', process.env.MONGO_URI);
+// Log the MONGO_URIlocal to check if it's being read correctly
+console.log('MONGO_URIlocal:', process.env.MONGO_URIlocal);
 
 // MongoDB connection
-mongoose.connect(process.env.MONGO_URI.trim(), { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(process.env.MONGO_URIlocal.trim(), { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('Error connecting to MongoDB:', err));
 

@@ -362,8 +362,8 @@ function delay(ms) {
     console.log(`Setting user agent: ${userAgent}`);
     await page.setUserAgent(userAgent);
 
-    await page.setViewport({ width: 1366, height: 768 });
-    console.log('Viewport size set to 1366x768.');
+    //await page.setViewport({ width: 1366, height: 768 });
+    //console.log('Viewport size set to 1366x768.');
 
     try {
         console.log('Navigating to login page...');

@@ -76,4 +76,3 @@ app.get('/api/orders/:orderId', async (req, res) => {
 app.listen(process.env.PORT || 4000, () => {
   console.log("Connected to db & listening on port", process.env.PORT || 4000);
 });
-const app = express ();

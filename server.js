@@ -1,22 +1,20 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import cors from 'cors';
-import mongoose from 'mongoose';
-import cookieParser from 'cookie-parser'; // Import cookie parser
-import { google } from 'googleapis';
-import nodemailer from 'nodemailer';
-import path from 'path';
-import dotenv from 'dotenv';
-import Order from './models/order.cjs'; // Same model for both orders and bids
-import { fileURLToPath } from 'url';
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const mongoose = require('mongoose');
+const cookieParser = require('cookie-parser'); 
+const { google } = require('googleapis');
+const nodemailer = require('nodemailer');
+const path = require('path');
+const dotenv = require('dotenv');
+const Order = require('./models/order.cjs'); 
 
 // Load environment variables from .env file
 dotenv.config();
 
-// Fix for `__dirname` in ES Modules
-const __filename = fileURLToPath(import.meta.url);
+// Fix for `__dirname` in CommonJS
+const __filename = __filename || process.argv[1];
 const __dirname = path.dirname(__filename);
-
 // Initialize the app
 const app = express();
 
@@ -78,3 +76,4 @@ app.get('/api/orders/:orderId', async (req, res) => {
 app.listen(process.env.PORT || 4000, () => {
   console.log("Connected to db & listening on port", process.env.PORT || 4000);
 });
+const app = express ();

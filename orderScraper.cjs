@@ -5,7 +5,7 @@ puppeteer.use(StealthPlugin());
 
 const scrapeOrderDetails = async (page) => {
     // Wait for the table to load
-    await page.waitForSelector('div.table-order', { timeout: 10000 });
+    await page.waitForSelector('div.table-order', { timeout: 6000 });
 
     // Check if there are any orders to display
     const hasOrders = await page.$eval('div.table-order .no-orders', (noOrdersDiv) => {

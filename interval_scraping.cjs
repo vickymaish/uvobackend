@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const path= require('path')
 const Order = require('./models/order.cjs'); // Import the existing Order model
 // Import scrapeOrderDetails function from orderScraper.js
-const { scrapeOrderDetails } = require('./orderScraper.cjs'); 
+//const { scrapeOrderDetails } = require('./orderScraper.cjs'); 
 const { takeScreenshot, sendScreenshotEmail } = require('./screenshot.cjs');
 
 
@@ -38,7 +38,7 @@ const sendEmail = async (subject, text, loginEmail, order) => {
     const mailOptions = {
         from: `"Uvotake" <${process.env.Email_User}>`,
         to: process.env.EMAIL_TO.trim(),
-        subject: `New Order from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,
+        subject: `New Order from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,  //margaret karis
         html: `
             <!DOCTYPE html>
             <html>
@@ -165,38 +165,21 @@ const sendEmail = async (subject, text, loginEmail, order) => {
 // Function to click the "Take Order" button
 const clickTakeOrderButton = async (page) => {
     try {
-        const takeOrderSelector = process.env.TAKE_ORDER_SELECTOR;  // Use the selector from .env
-        const placeBidSelector = process.env.PLACE_BID_SELECTOR; // Add the selector for the Place Bid button
+        const takeOrderSelector = process.env.TAKE_ORDER_SELECTOR;  // Selector from .env
 
-        console.log('Waiting for the button to load...');
+        console.log('Waiting for "Take Order" button to load...');
 
-        // Wait for either the "Take Order" or "Place Bid" button to appear
-        await page.waitForSelector(takeOrderSelector, { timeout: 10000 }).catch(() => null); // Try "Take Order" first
-        await page.waitForSelector(placeBidSelector, { timeout: 10000 }).catch(() => null); // If not found, try "Place Bid"
-
-        // Check if the "Place Bid" button exists (skip if found)
-        const placeBidButton = await page.$(placeBidSelector);
-        if (placeBidButton) {
-            console.log('Found "Place Bid" button, skipping...');
-            return;  // Skip clicking if the "Place Bid" button is found
-        }
-
-        // If "Place Bid" isn't found, proceed with "Take Order"
+        // Wait for "Take Order" button to appear
+        await page.waitForSelector(takeOrderSelector, { timeout: 5000 }).catch(() => null);
+        
         const takeOrderButton = await page.$(takeOrderSelector);
         if (takeOrderButton) {
-            // Check if the "Take Order" button is clickable
-            const buttonText = await page.evaluate(button => button.textContent, takeOrderButton);
-            if (buttonText.trim() === 'Take Order') {
-                console.log('Clicking the "Take Order" button...');
-                await takeOrderButton.click();
-                console.log('"Take Order" button clicked successfully.');
-            } else {
-                console.log('The button is not labeled as "Take Order".');
-            }
+            console.log('Clicking the "Take Order" button...');
+            await takeOrderButton.click();
+            console.log('"Take Order" button clicked successfully.');
         } else {
             console.log('No "Take Order" button found.');
         }
-
     } catch (error) {
         console.error('Error clicking the "Take Order" button:', error.message);
     }
@@ -205,15 +188,11 @@ const clickTakeOrderButton = async (page) => {
 
 // Function to scrape orders from the main page
 const scrapeOrders = async (page) => {
-    console.log('Scraping orders from the main page...');
-    
-    // Locate all orders on the main page
     const orders = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
             // Check for the revision class <i class="revision"></i>
             if (orderElement.querySelector('i.revision')) {
-                console.log('Skipping revision order...');
-                return null; 
+                return null; // Skip revision orders
             }
 
             const orderId = orderElement.getAttribute('data-order_id');
@@ -224,7 +203,6 @@ const scrapeOrders = async (page) => {
             const deadline = new Date(orderElement.querySelector('.time-order span')?.textContent.trim()) || 'N/A';
             const cpp = parseFloat(orderElement.querySelector('.cpp-order')?.textContent.trim()) || 0;
             const cost = parseFloat(orderElement.querySelector('.cost-order')?.textContent.trim()) || 0;
-            //const bid = parseFloat(orderElement.querySelector('.bid-order')?.textContent.trim()) || 0;
             const href = `https://www.uvocorp.com/order/${orderId}.html`;
 
             return {
@@ -236,7 +214,6 @@ const scrapeOrders = async (page) => {
                 deadline,
                 cost,
                 cpp,
-                //bid,
                 href,
                 isRevision: orderElement.querySelector('i.revision') !== null // Mark if order is a revision
             };
@@ -245,27 +222,25 @@ const scrapeOrders = async (page) => {
 
     for (const order of orders) {
         if (order.isRevision) {
-            console.log(`Skipping revision order with ID: ${order.OrderId}`);
-            continue;  // Skip revision orders
+            // Skip revision orders without logging
+            continue;  
         }
 
-        console.log(`Navigating to order page: ${order.href}`);
         await page.goto(order.href, { waitUntil: 'domcontentloaded' });
         
-        // Ensure the page is fully loaded before scraping
-        await page.waitForSelector('.order-details');  // Wait for an element that indicates the page is loaded
+        // Wait for the order page to load
+        await page.waitForSelector('.order');  
 
-        console.log('Scraping individual TAKE ORDER  order page...');
-        const details = await scrapeOrderDetails(page);
-        order.title = details.title;
-        order.instructions = details.instructions;
-        order.attachedFiles = details.attachedFiles;
-
-        console.log(`Scraped order details:`, details);
+        //const details = await scrapeOrderDetails(page);
+        //order.title = details.title;
+        //order.instructions = details.instructions;
+        //order.attachedFiles = details.attachedFiles;
 
         // Call the function to click the "Take Order" button
-        await clickTakeOrderButton(page);  // Click the "Take Order" button after scraping the details
+        await clickTakeOrderButton(page);  // Click "Take Order" after scraping details
 
+        // Log only when an order is successfully taken
+        console.log(`Successfully took order with ID: ${order.OrderId} - ${order.topicTitle}`);
 
         // Optionally, navigate back to the main orders page
         await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
@@ -273,7 +248,6 @@ const scrapeOrders = async (page) => {
 
     return orders;
 };
-
 
 
 // MongoDB Connection
@@ -293,7 +267,7 @@ const checkForNewOrders = async (page) => {
     const orders = await scrapeOrders(page);
     console.log('Scraped order details:', orders);
 
-    const loginEmail = process.env.Email_User;  // Define loginEmail before using it
+    const loginEmail = process.env.LOGIN_EMAIL;  // Define loginEmail before using it (Margaretkaris)
     
     if (orders.length > 0) {
         fs.writeFileSync('orders_with_details.json', JSON.stringify(orders, null, 2));
@@ -424,7 +398,7 @@ function delay(ms) {
             } else {
                 console.log('Waiting for the current scrape cycle to finish...');
             }
-        }, 600);  // 600ms interval
+        }, 500);  // 600ms interval
         
 
     } catch (error) {

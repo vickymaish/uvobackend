@@ -38,7 +38,7 @@ const sendEmail = async (subject, text, loginEmail, order) => {
     const mailOptions = {
         from: `"Uvotake" <${process.env.Email_User}>`,
         to: process.env.EMAIL_TO.trim(),
-        subject: `New Order from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,  //margaret karis
+        subject: `New Order from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,
         html: `
             <!DOCTYPE html>
             <html>
@@ -110,38 +110,29 @@ const sendEmail = async (subject, text, loginEmail, order) => {
                                     <td>${order.OrderId || 'N/A'}</td>
                                 </tr>
                                 <tr>
-                                    <th>Topic Title</th>
-                                    <td>${order.topicTitle || 'N/A'}</td>
+                                    <th>Title</th>
+                                    <td>${order.title || 'N/A'}</td>
                                 </tr>
                                 <tr>
                                     <th>Discipline</th>
                                     <td>${order.discipline || 'N/A'}</td>
                                 </tr>
                                 <tr>
-                                    <th>Academic Level</th>
-                                    <td>${order.academicLevel || 'N/A'}</td>
-                                </tr>
-                                <tr>
-                                    <th>Deadline</th>
-                                    <td>${order.deadline || 'N/A'}</td>
+                                    <th>Type of Paper</th>
+                                    <td>${order.typeOfPaper || 'N/A'}</td>
                                 </tr>
                                 <tr>
                                     <th>Pages</th>
                                     <td>${order.pages || 'N/A'}</td>
                                 </tr>
                                 <tr>
-                                    <th>Cost</th>
-                                    <td>${order.cost || 'N/A'}</td>
+                                    <th>Deadline</th>
+                                    <td>${order.deadline || 'N/A'}</td>
                                 </tr>
                                 <tr>
-                                    <th>Cost Per Page (CPP)</th>
-                                    <td>${order.cpp || 'N/A'}</td>
+                                    <th>Price</th>
+                                    <td>${order.price || 'N/A'}</td>
                                 </tr>
-                                <tr>
-                                    <th>Bid</th>
-                                    <td>${order.bid || 'N/A'}</td>
-                                </tr>
-                                
                             </table>
                             <p class="quote">${text}</p>
                         </div>
@@ -185,70 +176,149 @@ const clickTakeOrderButton = async (page) => {
     }
 };
 
+const acceptedDisciplines = [
+    'Humanities', 'Art (Fine arts, Performing arts)', 'Classic English Literature', 'Composition',
+    'English 101', 'Film & Theater studies', 'History', 'Linguistics', 'Literature', 'Music',
+    'Philosophy', 'Poetry', 'Religious studies', 'Shakespeare', 'Social Sciences', 'Anthropology',
+    'Cultural and Ethnic Studies', 'Economics', 'Ethics', 'Political science', 'Psychology', 'Social Work and Human Services',
+    'Sociology', 'Tourism', 'Urban Studies', "Women's & gender studies", 'Business and administrative studies',
+    'Business Studies', 'Human Resources Management (HRM)', 'International Relations', 'Logistics', 'Management',
+    'Marketing', 'Public Relations (PR)', 'Natural Sciences', 'Biology (and other Life Sciences)', 'Chemistry', 'Ecology',
+    'Geography', 'Geology (and other Earth Sciences)', 'Zoology', 'Agriculture', 'Application Letters', 'Communications',
+    'Criminal law', 'Education', 'Environmental studies and Forestry', 'Family and consumer science', 'Law', 'Leadership Studies',
+    'Nutrition/Dietary', 'Public Administration', 'Sports'
+];
 
-// Function to scrape orders from the main page
+const TAKE_ORDER_SELECTOR = process.env.TAKE_ORDER_SELECTOR;
+
 const scrapeOrders = async (page) => {
-    const orders = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
-            // Check for the revision class <i class="revision"></i>
-            if (orderElement.querySelector('i.revision')) {
-                return null; // Skip revision orders
-            }
-
-            const orderId = orderElement.getAttribute('data-order_id');
-            const topicTitle = orderElement.querySelector('.title-order')?.textContent.trim() || 'N/A';
-            const discipline = orderElement.querySelector('.discipline-order')?.textContent.trim() || 'N/A';
-            const academicLevel = orderElement.querySelector('.academic-level-order')?.textContent.trim() || 'N/A';
-            const pages = parseInt(orderElement.querySelector('.pages-order')?.textContent.trim()) || 0;
-            const deadline = new Date(orderElement.querySelector('.time-order span')?.textContent.trim()) || 'N/A';
-            const cpp = parseFloat(orderElement.querySelector('.cpp-order')?.textContent.trim()) || 0;
-            const cost = parseFloat(orderElement.querySelector('.cost-order')?.textContent.trim()) || 0;
-            const href = `https://www.uvocorp.com/order/${orderId}.html`;
-
-            return {
-                OrderId: orderId,
-                topicTitle,
-                discipline,
-                academicLevel,
-                pages,
-                deadline,
-                cost,
-                cpp,
-                href,
-                isRevision: orderElement.querySelector('i.revision') !== null // Mark if order is a revision
-            };
-        }).filter(order => order !== null); 
-    });
-
-    for (const order of orders) {
-        if (order.isRevision) {
-            // Skip revision orders without logging
-            continue;  
-        }
-
-        await page.goto(order.href, { waitUntil: 'domcontentloaded' });
-        
-        // Wait for the order page to load
-        await page.waitForSelector('.order');  
-
-        //const details = await scrapeOrderDetails(page);
-        //order.title = details.title;
-        //order.instructions = details.instructions;
-        //order.attachedFiles = details.attachedFiles;
-
-        // Call the function to click the "Take Order" button
-        await clickTakeOrderButton(page);  // Click "Take Order" after scraping details
-
-        // Log only when an order is successfully taken
-        console.log(`Successfully took order with ID: ${order.OrderId} - ${order.topicTitle}`);
-
-        // Optionally, navigate back to the main orders page
-        await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
+    if (isScraping) {
+        console.log('Waiting for the current scrape cycle to finish...');
+        return;
     }
 
-    return orders;
+    isScraping = true; // Set the flag to indicate a scrape cycle is running
+
+    try {
+        console.log('Starting a new scrape cycle...');
+        const orders = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
+                // Skip revision orders
+                if (orderElement.querySelector('i.revision')) {
+                    return null;
+                }
+
+                const orderId = orderElement.getAttribute('data-order_id');
+                const topicTitle = orderElement.querySelector('.title-order')?.textContent.trim() || 'N/A';
+                const discipline = orderElement.querySelector('.discipline-order')?.textContent.trim() || 'N/A';
+                const href = `https://www.uvocorp.com/order/${orderId}.html`;
+
+                return {
+                    OrderId: orderId,
+                    discipline,
+                    href,
+                    topicTitle,
+                    isRevision: orderElement.querySelector('i.revision') !== null // Mark if order is a revision
+                };
+            }).filter(order => order !== null); // Filter out null values (revision orders)
+        });
+
+        if (orders.length === 0) {
+            console.log('No orders available.');
+            return;
+        }
+
+        for (const order of orders) {
+            // Log the order being processed
+            console.log(`Processing order with ID: ${order.OrderId} - ${order.topicTitle}`);
+
+            // Check if the order's discipline is in the accepted list
+            if (!acceptedDisciplines.includes(order.discipline)) {
+                console.log(`Skipping order with ID: ${order.OrderId} - Discipline: ${order.discipline} (Not Accepted)`);
+                continue; // Skip this order if its discipline isn't in the list
+            }
+
+            try {
+                // Click on the order link to go to the order details page
+                console.log(`Navigating to order details page: ${order.href}`);
+                await page.goto(order.href, { waitUntil: 'domcontentloaded' });
+
+                // Wait for the "Take Order" button to appear
+                console.log('Waiting for "Take Order" button...');
+                await page.waitForSelector(TAKE_ORDER_SELECTOR, { visible: true, timeout: 5000 });
+
+                // Check if the "Take Order" button is present and click it
+                const button = await page.$(TAKE_ORDER_SELECTOR);
+                if (button) {
+                    console.log('Clicking "Take Order" button...');
+                    await button.click();
+                    console.log(`Successfully took order with ID: ${order.OrderId} - ${order.topicTitle}`);
+
+                    // Now that the order is taken, scrape the order details
+                    const orderDetails = await scrapeOrderDetails(page);
+                    console.log('Order Details:', orderDetails);
+                } else {
+                    console.log(`Order at ${order.href} does not have a 'Take Order' button. Skipping.`);
+                }
+
+                // Navigate back to the available orders page to continue processing
+                console.log('Navigating back to available orders page...');
+                await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
+            } catch (error) {
+                console.error(`Error processing order ${order.OrderId}:`, error.message);
+            }
+        }
+    } catch (error) {
+        console.error('Error during scrape cycle:', error.message);
+    } finally {
+        isScraping = false; // Reset the flag when the scrape cycle finishes
+    }
 };
 
+const scrapeOrderDetails = async (page) => {
+    // Scraping details from the order details page
+    const orderDetails = await page.evaluate(() => {
+        const details = {};
+
+        // Scraping details based on the label-value pairs in the <li> elements
+        const listItems = document.querySelectorAll('ul.order--tabs__content-instraction-table li');
+
+        listItems.forEach((li) => {
+            const label = li.querySelector('.order--tabs__content-instraction-table-label')?.textContent.trim();
+            const value = li.querySelector('.order--tabs__content-instraction-table-value')?.textContent.trim();
+
+            if (label && value) {
+                // Extracting specific details based on the label
+                switch (label) {
+                    case 'Price':
+                        details.price = value;
+                        break;
+                    case 'Deadline':
+                        details.deadline = value;
+                        break;
+                    case 'Pages':
+                        details.pages = value;
+                        break;
+                    case 'Type of paper':
+                        details.typeOfPaper = value;
+                        break;
+                    case 'Discipline':
+                        details.discipline = value;
+                        break;
+                    case 'Title':
+                        details.title = value;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        });
+
+        return details;
+    });
+
+    return orderDetails;
+};
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URIlocal, {
@@ -264,54 +334,64 @@ mongoose.connect(process.env.MONGO_URIlocal, {
 const checkForNewOrders = async (page) => {
     console.log('Checking for new orders...');
     
-    const orders = await scrapeOrders(page);
+    // Scrape orders and ensure the result is an array
+    const orders = await scrapeOrders(page) || [];
     console.log('Scraped order details:', orders);
 
-    const loginEmail = process.env.LOGIN_EMAIL;  // Define loginEmail before using it (Margaretkaris)
-    
+    if (!Array.isArray(orders)) {
+        console.error('Error: scrapeOrders did not return an array.');
+        return [];
+    }
+
+    const loginEmail = process.env.LOGIN_EMAIL;
+
     if (orders.length > 0) {
+        // Save order details to a JSON file
         fs.writeFileSync('orders_with_details.json', JSON.stringify(orders, null, 2));
         console.log('Order details saved to orders_with_details.json.');
 
         // Save orders to MongoDB
-        for (const order of orders) {
-            try {
-                const newOrder = new Order(order);
-                await newOrder.save();
-                console.log(`Order ${order.OrderId} saved to MongoDB.`);
-            } catch (error) {
-                console.error(`Error saving order ${order.OrderId}:`, error.message);
-            }
+        try {
+            await Order.insertMany(orders); // Save all orders in a single operation
+            console.log(`${orders.length} orders saved to MongoDB.`);
+        } catch (error) {
+            console.error('Error saving orders to MongoDB:', error.message);
         }
 
-        // Send emails
+        // Send emails for each order
         for (const order of orders) {
-            const subject = `New Order Uvotake ${loginEmail.split('@')[0]}: ${order.OrderId}`;
-            const text = `Order ID: ${order.OrderId}\nTopic Title: ${order.topicTitle}\nDiscipline: ${order.discipline}\nPages: ${order.pages}\nDeadline: ${order.deadline}\nCPP: ${order.cpp}\nCost: ${order.cost}`;
-            await sendEmail(subject, text, loginEmail, order);
+            try {
+                const subject = `New Order Uvotake ${loginEmail.split('@')[0]}: ${order.OrderId}`;
+                const text = `Order ID: ${order.OrderId || 'N/A'}\n` +
+                             `Topic Title: ${order.topicTitle || 'N/A'}\n` +
+                             `Discipline: ${order.discipline || 'N/A'}\n` +
+                             `Pages: ${order.pages || 'N/A'}\n` +
+                             `Deadline: ${order.deadline || 'N/A'}\n` +
+                             `CPP: ${order.cpp || 'N/A'}\n` +
+                             `Cost: ${order.cost || 'N/A'}`;
+                await sendEmail(subject, text, loginEmail, order);
+                console.log(`Email sent for order ${order.OrderId}.`);
+            } catch (error) {
+                console.error(`Error sending email for order ${order.OrderId}:`, error.message);
+            }
         }
     } else {
         console.log('No new orders found.');
-        // Wait for a few minutes before taking a screenshot
-        //await delay(3 * 60 * 1000); // 3 minutes delay
-        // Take a screenshot
-        // Dynamic path for screenshot
-        //const screenshotPath = path.join(__dirname, 'uvocorp_no_orders_screenshot.png');
-        //await takeScreenshot(page, screenshotPath);
-
-        // Send the screenshot email
-        //const subject = 'No New Orders Found - Screenshot';
-        //const loginEmail = process.env.Email_User;
-        //const text = 'No new orders were found after checking. Here is a screenshot of the page.';
-        //await sendScreenshotEmail(subject, text, loginEmail, screenshotPath);
     }
+    
+    return orders; // Ensure function always returns an array
 };
 
 // Using dedlay promise in clicking enter using puppeteer
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+
+let isScraping = false; // Declare isScraping globally
+
 (async () => {
+    // Launch Puppeteer browser
     const browser = await puppeteer.launch({
         headless: false,
         executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -325,6 +405,8 @@ function delay(ms) {
     });
 
     const page = await browser.newPage();
+
+    // Close the first tab opened by Chromium
     const pages = await browser.pages();
     if (pages.length > 0) {
         console.log('Closing the first tab opened by Chromium...');
@@ -332,18 +414,20 @@ function delay(ms) {
         console.log('First tab closed successfully.');
     }
 
+    // Set user agent
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
     console.log(`Setting user agent: ${userAgent}`);
     await page.setUserAgent(userAgent);
 
-    //await page.setViewport({ width: 1366, height: 768 });
-    //console.log('Viewport size set to 1366x768.');
+    let isScraping = false; // Declare isScraping in the outer scope of the async function
 
     try {
+        // Navigate to the login page
         console.log('Navigating to login page...');
         const url = 'https://www.uvocorp.com/login.html';
         await page.goto(url, { timeout: 0, waitUntil: 'domcontentloaded' });
 
+        // Accept cookies
         const acceptCookiesSelector = process.env.BUTTON_SELECTOR;
         console.log('Waiting for the "Accept Cookies" button...');
         await page.waitForSelector(acceptCookiesSelector, { timeout: 18000 });
@@ -352,10 +436,10 @@ function delay(ms) {
         await page.click(acceptCookiesSelector);
         console.log('"Accept Cookies" button clicked successfully.');
 
+        // Log in
         console.log('Waiting for login form...');
         const loginEmailSelector = process.env.LOGIN_EMAIL_SELECTOR;
         const loginPasswordSelector = process.env.LOGIN_PASSWORD_SELECTOR;
-        //const loginButtonSelector = process.env.LOGIN_BUTTON_SELECTOR;
 
         await page.waitForSelector(loginEmailSelector);
 
@@ -365,12 +449,8 @@ function delay(ms) {
         console.log('Typing password...');
         await page.type(loginPasswordSelector, process.env.LOGIN_PASSWORD, { delay: randomDelay(150, 250) });
 
-        // console.log('Clicking login button...');
-        // await page.waitForSelector(loginButtonSelector);
-        // await page.click(loginButtonSelector);
-
         console.log('Waiting for 5-10 seconds before pressing Enter...');
-        await delay (5000 + Math.floor(Math.random() * 5000));
+        await delay(5000 + Math.floor(Math.random() * 5000));
 
         console.log('Pressing Enter to submit the form...');
         await page.keyboard.press('Enter'); // Simulate pressing the Enter key
@@ -378,28 +458,37 @@ function delay(ms) {
         console.log('Waiting for you to manually solve the CAPTCHA and log in...');
         await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 0 });
 
+        // Save cookies
         console.log('Saving cookies...');
         await saveCookies(page, './cookies.json');
 
-        let isScraping = false;  // Add a flag to track scraping status
+        // Start interval-based scraping
+        const scrapeInterval = 300; // 0.8 seconds
 
-        setInterval(async () => {
-            if (!isScraping) {  // Check if the scraping cycle is already running
-                isScraping = true;  // Set the flag to true to prevent overlapping cycles
+        const startScraping = async () => {
+            if (!isScraping) { // Check if the scraping cycle is already running
+                isScraping = true; // Set the flag to true to prevent overlapping cycles
                 console.log('Starting a new scrape cycle...');
-                
+
                 try {
-                    await checkForNewOrders(page);  // Scrape new orders
+                    const orders = await checkForNewOrders(page); // Scrape new orders
+
+                    if (orders.length > 0) {
+                        console.log('Scraped order details:', orders);
+                    } else {
+                        console.log('No new orders found.');
+                    }
                 } catch (error) {
                     console.error('Error during scrape cycle:', error.message);
+                } finally {
+                    isScraping = false; // Reset the flag when the cycle finishes
                 }
-        
-                isScraping = false;  // Reset the flag when the cycle finishes
             } else {
                 console.log('Waiting for the current scrape cycle to finish...');
             }
-        }, 500);  // 600ms interval
-        
+        };
+
+        setInterval(startScraping, scrapeInterval);
 
     } catch (error) {
         console.error('Error during execution:', error.message);

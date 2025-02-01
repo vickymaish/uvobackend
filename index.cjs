@@ -64,7 +64,7 @@ puppeteer.use(StealthPlugin());
         };
 
         // Start interval-based scraping (every 5 minutes)
-        const scrapeInterval = 300; // 5 minutes in milliseconds
+        const scrapeInterval = 1000; // 5 minutes in milliseconds
         setInterval(startScraping, scrapeInterval);
         logger.info(`Scraping started. Checking for new orders every ${scrapeInterval / 1000} seconds.`);
     } catch (error) {

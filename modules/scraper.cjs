@@ -1,5 +1,6 @@
 const config = require('../config/config.cjs');
 const logger = require('../utils/logger.cjs');
+const { loadSession } = require('../utils/sessionHandler.cjs'); // Import loadSession function
 
 const acceptedDisciplines = [
     'Humanities', 'Art (Fine arts, Performing arts)', 'Classic English Literature', 'Composition',
@@ -39,6 +40,12 @@ const clickTakeOrderButton = async (page, orderId) => {
 const scrapeOrders = async (page, lastCheckedOrderId) => {
     try {
         logger.info('Starting to scrape orders...');
+        
+        // Load session cookies before navigating
+        await loadSession(page, './session.json'); // Load session from saved file
+
+        await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
+
         const orders = await page.evaluate(() => {
             return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
                 // Skip revision orders

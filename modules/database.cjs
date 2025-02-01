@@ -1,29 +1,17 @@
 const mongoose = require('mongoose');
-const Order = require('../models/order.cjs');
 const config = require('../config/config.cjs');
 const logger = require('../utils/logger.cjs');
 
 const connectDB = async () => {
+    const dbURI = config.MONGO.URI || config.MONGO.LOCAL_URI;
+
     try {
-        await mongoose.connect(config.MONGO.LOCAL_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
-        logger.info('Connected to MongoDB');
+        await mongoose.connect(dbURI);
+        logger.info(`Connected to MongoDB: ${dbURI}`);
     } catch (error) {
         logger.error('Error connecting to MongoDB:', { error: error.message });
-        throw error;
+        process.exit(1); // Stop app if DB fails
     }
 };
 
-const saveOrders = async (orders) => {
-    try {
-        await Order.insertMany(orders);
-        logger.info(`${orders.length} orders saved to MongoDB.`);
-    } catch (error) {
-        logger.error('Error saving orders to MongoDB:', { error: error.message });
-        throw error;
-    }
-};
-
-module.exports = { connectDB, saveOrders };
+module.exports = { connectDB };

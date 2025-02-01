@@ -37,7 +37,7 @@ const sendEmail = async (subject, text, loginEmail, order) => {
 
     const mailOptions = {
         from: `"Uvotake" <${process.env.Email_User}>`,
-        to: process.env.EMAIL_TO.trim(),
+        to: `${process.env.EMAIL_TO.trim()}, thomasmuia1998@gmail.com`, // Add multiple recipients
         subject: `New Order from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,
         html: `
             <!DOCTYPE html>
@@ -154,6 +154,7 @@ const sendEmail = async (subject, text, loginEmail, order) => {
 };
 
 
+
 const LAST_CHECKED_ORDER_FILE = 'last_checked_order.json';
 
 // Function to read last checked order ID
@@ -213,7 +214,7 @@ const TAKE_ORDER_SELECTOR = process.env.TAKE_ORDER_SELECTOR;
 
 let lastCheckedOrderId = null; // Store last processed order
 
-const scrapeOrders = async (page) => {
+const scrapeOrders = async (page) => { 
     if (isScraping) {
         console.log(`[${new Date().toISOString()}] Waiting for the current scrape cycle to finish...`);
         return;
@@ -226,7 +227,8 @@ const scrapeOrders = async (page) => {
 
         const orders = await page.evaluate(() => {
             return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
-                if (orderElement.querySelector('i.revision')) return null; // Skip revisions
+                // **Skip revision orders**
+                if (orderElement.querySelector('i.revision')) return null;
 
                 const orderId = orderElement.getAttribute('data-order_id');
                 const topicTitle = orderElement.querySelector('.title-order')?.textContent.trim() || 'N/A';
@@ -238,14 +240,18 @@ const scrapeOrders = async (page) => {
                 const costText = orderElement.querySelector('.cost-order')?.textContent.trim() || 'N/A';
                 const cost = parseFloat(costText.replace('$', '')) || 0;
 
-                if (cpp <= 3) return null; // Filter out low-paying orders
+                // **Check if it's a 'Take Order' by verifying .take-order class**
+                const isTakeOrder = orderElement.querySelector('.cost-order.take-order') !== null;
+
+                if (!isTakeOrder) return null; // Skip "Place Bid" orders
+                if (cpp <= 3) return null; // Skip low-paying orders
 
                 return { OrderId: orderId, topicTitle, discipline, cpp, cost, href };
             }).filter(order => order !== null);
         });
 
         if (orders.length === 0) {
-            console.log(`[${new Date().toISOString()}] No new orders available.`);
+            console.log(`[${new Date().toISOString()}] No new 'Take Order' orders available.`);
             return;
         }
 
@@ -255,13 +261,13 @@ const scrapeOrders = async (page) => {
             : orders;
 
         if (newOrders.length === 0) {
-            console.log(`[${new Date().toISOString()}] No new orders found since last check.`);
+            console.log(`[${new Date().toISOString()}] No new 'Take Order' orders found since last check.`);
             return;
         }
 
-        console.log(`[${new Date().toISOString()}] Found ${newOrders.length} new orders.`);
+        console.log(`[${new Date().toISOString()}] Found ${newOrders.length} new 'Take Order' orders.`);
 
-        // Process new orders
+        // **Navigate to each order's details page and click 'Take Order'**
         await Promise.all(
             newOrders.map(async (order) => {
                 if (!acceptedDisciplines.includes(order.discipline)) {
@@ -273,6 +279,7 @@ const scrapeOrders = async (page) => {
                     console.log(`Navigating to order ${order.OrderId}: ${order.href}`);
                     await page.goto(order.href, { waitUntil: 'domcontentloaded' });
 
+                    // Look for the 'Take Order' button
                     const button = await page.$(TAKE_ORDER_SELECTOR);
                     if (!button) {
                         console.log(`Order ${order.OrderId} does not have a 'Take Order' button.`);
@@ -281,6 +288,9 @@ const scrapeOrders = async (page) => {
 
                     console.log(`Clicking 'Take Order' for order ${order.OrderId}...`);
                     await button.click();
+
+                    // Wait a bit to confirm the order was taken
+                    await page.waitForTimeout(3000); // Adjust timing if needed
 
                     const orderDetails = await scrapeOrderDetails(page);
                     console.log(`Order ${order.OrderId} taken successfully. Details:`, orderDetails);
@@ -300,6 +310,7 @@ const scrapeOrders = async (page) => {
         isScraping = false;
     }
 };
+
 
 
 const scrapeOrderDetails = async (page) => {
@@ -458,7 +469,7 @@ let isScraping = false; // Declare isScraping globally
         const acceptCookiesSelector = process.env.BUTTON_SELECTOR;
         console.log('Waiting for the "Accept Cookies" button...');
 
-        await page.waitForSelector(acceptCookiesSelector, { timeout: 18000 });
+        await page.waitForSelector(acceptCookiesSelector, { timeout: 40000 });
 
         // Check if the button is actually present
         const buttonExists = await page.$(acceptCookiesSelector);
@@ -481,10 +492,10 @@ let isScraping = false; // Declare isScraping globally
         await page.waitForSelector(loginEmailSelector);
 
         console.log('Typing email...');
-        await page.type(loginEmailSelector, process.env.LOGIN_EMAIL, { delay: randomDelay(750, 950) });
+        await page.type(loginEmailSelector, process.env.LOGIN_EMAIL, { delay: randomDelay(150, 250) });
 
         console.log('Typing password...');
-        await page.type(loginPasswordSelector, process.env.LOGIN_PASSWORD, { delay: randomDelay(880, 1000) });
+        await page.type(loginPasswordSelector, process.env.LOGIN_PASSWORD, { delay: randomDelay(180, 250) });
 
         console.log('Waiting for 5-10 seconds before pressing Enter...');
         await delay(5000 + Math.floor(Math.random() * 5000));
@@ -500,7 +511,7 @@ let isScraping = false; // Declare isScraping globally
         await saveCookies(page, './cookies.json');
 
         // Start interval-based scraping
-        const scrapeInterval = 300; // 0.8 seconds
+        const scrapeInterval = 500; // 0.8 seconds
 
         const startScraping = async () => {
             if (!isScraping) { // Check if the scraping cycle is already running

@@ -17,10 +17,11 @@
     "path": "^0.12.7",
     "puppeteer": "^23.11.1",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "winston": "^3.17.0"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node interval_scraping.cjs"
   },
   "type": "module"
 }

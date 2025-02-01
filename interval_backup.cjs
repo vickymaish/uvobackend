@@ -9,7 +9,7 @@ const path= require('path')
 const Order = require('./models/order.cjs'); // Import the existing Order model
 // Import scrapeOrderDetails function from orderScraper.js
 //const { scrapeOrderDetails } = require('./orderScraper.cjs'); 
-//const { takeScreenshot, sendScreenshotEmail } = require('./screenshot.cjs');
+const { takeScreenshot, sendScreenshotEmail } = require('./screenshot.cjs');
 
 
 // Use the Puppeteer stealth plugin to avoid detection and lets see 
@@ -153,48 +153,28 @@ const sendEmail = async (subject, text, loginEmail, order) => {
     });
 };
 
-
-const LAST_CHECKED_ORDER_FILE = 'last_checked_order.json';
-
-// Function to read last checked order ID
-const getLastCheckedOrderId = () => {
-    if (fs.existsSync(LAST_CHECKED_ORDER_FILE)) {
-        const data = fs.readFileSync(LAST_CHECKED_ORDER_FILE);
-        return JSON.parse(data).lastCheckedOrderId || null;
-    }
-    return null;
-};
-
-// Function to update last checked order ID
-const updateLastCheckedOrderId = (orderId) => {
-    fs.writeFileSync(LAST_CHECKED_ORDER_FILE, JSON.stringify({ lastCheckedOrderId: orderId }, null, 2));
-};
-
-
 // Function to click the "Take Order" button
-const clickTakeOrderButton = async (page, orderId) => {
+const clickTakeOrderButton = async (page) => {
     try {
         const takeOrderSelector = process.env.TAKE_ORDER_SELECTOR;  // Selector from .env
 
-        console.log(`Waiting for "Take Order" button for order ${orderId}...`);
+        console.log('Waiting for "Take Order" button to load...');
 
-        // Wait for "Take Order" button to appear (or timeout after 3 seconds)
-        await page.waitForSelector(takeOrderSelector, { timeout: 3000 }).catch(() => null);
-
+        // Wait for "Take Order" button to appear
+        await page.waitForSelector(takeOrderSelector, { timeout: 5000 }).catch(() => null);
+        
         const takeOrderButton = await page.$(takeOrderSelector);
         if (takeOrderButton) {
-            console.log(`Clicking the "Take Order" button for order ${orderId}...`);
+            console.log('Clicking the "Take Order" button...');
             await takeOrderButton.click();
-            console.log(`"Take Order" button clicked successfully for order ${orderId}.`);
+            console.log('"Take Order" button clicked successfully.');
         } else {
-            console.log(`Order ${orderId} is a "Place Bid" type. Returning to available orders page.`);
-            await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'networkidle2' });
+            console.log('No "Take Order" button found.');
         }
     } catch (error) {
-        console.error(`Error clicking the "Take Order" button for order ${orderId}:`, error.message);
+        console.error('Error clicking the "Take Order" button:', error.message);
     }
 };
-
 
 const acceptedDisciplines = [
     'Humanities', 'Art (Fine arts, Performing arts)', 'Classic English Literature', 'Composition',
@@ -211,96 +191,89 @@ const acceptedDisciplines = [
 
 const TAKE_ORDER_SELECTOR = process.env.TAKE_ORDER_SELECTOR;
 
-let lastCheckedOrderId = null; // Store last processed order
-
 const scrapeOrders = async (page) => {
     if (isScraping) {
-        console.log(`[${new Date().toISOString()}] Waiting for the current scrape cycle to finish...`);
+        console.log('Waiting for the current scrape cycle to finish...');
         return;
     }
 
-    isScraping = true;
+    isScraping = true; // Set the flag to indicate a scrape cycle is running
 
     try {
-        console.log(`[${new Date().toISOString()}] Starting a new scrape cycle...`);
-
+        console.log('Starting a new scrape cycle...');
         const orders = await page.evaluate(() => {
             return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
-                if (orderElement.querySelector('i.revision')) return null; // Skip revisions
+                // Skip revision orders
+                if (orderElement.querySelector('i.revision')) {
+                    return null;
+                }
 
                 const orderId = orderElement.getAttribute('data-order_id');
                 const topicTitle = orderElement.querySelector('.title-order')?.textContent.trim() || 'N/A';
                 const discipline = orderElement.querySelector('.discipline-order')?.textContent.trim() || 'N/A';
                 const href = `https://www.uvocorp.com/order/${orderId}.html`;
 
-                const cppText = orderElement.querySelector('.cpp-order')?.textContent.trim() || 'N/A';
-                const cpp = parseFloat(cppText.replace('$', '')) || 0;
-                const costText = orderElement.querySelector('.cost-order')?.textContent.trim() || 'N/A';
-                const cost = parseFloat(costText.replace('$', '')) || 0;
-
-                if (cpp <= 3) return null; // Filter out low-paying orders
-
-                return { OrderId: orderId, topicTitle, discipline, cpp, cost, href };
-            }).filter(order => order !== null);
+                return {
+                    OrderId: orderId,
+                    discipline,
+                    href,
+                    topicTitle,
+                    isRevision: orderElement.querySelector('i.revision') !== null // Mark if order is a revision
+                };
+            }).filter(order => order !== null); // Filter out null values (revision orders)
         });
 
         if (orders.length === 0) {
-            console.log(`[${new Date().toISOString()}] No new orders available.`);
+            console.log('No orders available.');
             return;
         }
 
-        // **Filter orders based on lastCheckedOrderId**
-        const newOrders = lastCheckedOrderId
-            ? orders.filter(order => order.OrderId > lastCheckedOrderId)
-            : orders;
+        for (const order of orders) {
+            // Log the order being processed
+            console.log(`Processing order with ID: ${order.OrderId} - ${order.topicTitle}`);
 
-        if (newOrders.length === 0) {
-            console.log(`[${new Date().toISOString()}] No new orders found since last check.`);
-            return;
-        }
+            // Check if the order's discipline is in the accepted list
+            if (!acceptedDisciplines.includes(order.discipline)) {
+                console.log(`Skipping order with ID: ${order.OrderId} - Discipline: ${order.discipline} (Not Accepted)`);
+                continue; // Skip this order if its discipline isn't in the list
+            }
 
-        console.log(`[${new Date().toISOString()}] Found ${newOrders.length} new orders.`);
+            try {
+                // Click on the order link to go to the order details page
+                console.log(`Navigating to order details page: ${order.href}`);
+                await page.goto(order.href, { waitUntil: 'domcontentloaded' });
 
-        // Process new orders
-        await Promise.all(
-            newOrders.map(async (order) => {
-                if (!acceptedDisciplines.includes(order.discipline)) {
-                    console.log(`Skipping order ${order.OrderId} (Discipline: ${order.discipline})`);
-                    return;
-                }
+                // Wait for the "Take Order" button to appear
+                console.log('Waiting for "Take Order" button...');
+                await page.waitForSelector(TAKE_ORDER_SELECTOR, { visible: true, timeout: 5000 });
 
-                try {
-                    console.log(`Navigating to order ${order.OrderId}: ${order.href}`);
-                    await page.goto(order.href, { waitUntil: 'domcontentloaded' });
-
-                    const button = await page.$(TAKE_ORDER_SELECTOR);
-                    if (!button) {
-                        console.log(`Order ${order.OrderId} does not have a 'Take Order' button.`);
-                        return;
-                    }
-
-                    console.log(`Clicking 'Take Order' for order ${order.OrderId}...`);
+                // Check if the "Take Order" button is present and click it
+                const button = await page.$(TAKE_ORDER_SELECTOR);
+                if (button) {
+                    console.log('Clicking "Take Order" button...');
                     await button.click();
+                    console.log(`Successfully took order with ID: ${order.OrderId} - ${order.topicTitle}`);
 
+                    // Now that the order is taken, scrape the order details
                     const orderDetails = await scrapeOrderDetails(page);
-                    console.log(`Order ${order.OrderId} taken successfully. Details:`, orderDetails);
-                } catch (error) {
-                    console.error(`Error processing order ${order.OrderId}:`, error.message);
+                    console.log('Order Details:', orderDetails);
+                } else {
+                    console.log(`Order at ${order.href} does not have a 'Take Order' button. Skipping.`);
                 }
-            })
-        );
 
-        // **Update lastCheckedOrderId to the most recent order**
-        lastCheckedOrderId = newOrders[0].OrderId;
-        console.log(`Updated lastCheckedOrderId to ${lastCheckedOrderId}`);
-
+                // Navigate back to the available orders page to continue processing
+                console.log('Navigating back to available orders page...');
+                await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
+            } catch (error) {
+                console.error(`Error processing order ${order.OrderId}:`, error.message);
+            }
+        }
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] Error during scrape cycle:`, error.message);
+        console.error('Error during scrape cycle:', error.message);
     } finally {
-        isScraping = false;
+        isScraping = false; // Reset the flag when the scrape cycle finishes
     }
 };
-
 
 const scrapeOrderDetails = async (page) => {
     // Scraping details from the order details page

@@ -7,7 +7,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const path= require('path')
-const Order = require('./models/order.cjs'); // Import the existing Order model
+const Order = require('./backend/models/order.cjs'); // Import the existing Order model
 // Import scrapeOrderDetails function from orderScraper.js
 //const { scrapeOrderDetails } = require('./orderScraper.cjs'); 
 //const { takeScreenshot, sendScreenshotEmail } = require('./screenshot.cjs');

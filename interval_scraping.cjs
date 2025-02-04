@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const express = require('express');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -34,12 +35,11 @@ const sendEmail = async (subject, text, loginEmail, order) => {
             pass: process.env.Email_Password,
         },
     });
+    let htmlContent;
 
-    const mailOptions = {
-        from: `"Uvotake" <${process.env.Email_User}>`,
-        to: `${process.env.EMAIL_TO.trim()}, thomasmuia1998@gmail.com`, // Add multiple recipients
-        subject: `New Order from UVOTAKE ${loginEmail.split('@')[0]}: ${subject}`,
-        html: `
+    if (order) {
+        // Order details email template
+        htmlContent = ` 
             <!DOCTYPE html>
             <html>
                 <head>
@@ -142,7 +142,40 @@ const sendEmail = async (subject, text, loginEmail, order) => {
                     </div>
                 </body>
             </html>
-        `,
+        `;
+    }else {
+        // Login email notification template;
+        htmlContent = `
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <style>
+                        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4; }
+                        .email-container { max-width: 600px; margin: auto; background: #ffffff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); overflow: hidden; }
+                        .header { background: #ff9800; color: white; text-align: center; padding: 20px; font-size: 24px; }
+                        .body { padding: 20px; color: #333333; line-height: 1.6; }
+                        .footer { text-align: center; background: #eeeeee; padding: 10px; font-size: 12px; color: #777777; }
+                    </style>
+                </head>
+                <body>
+                    <div class="email-container">
+                        <div class="header">Uvotake Bot Logged Out</div>
+                        <div class="body">
+                            <p>Hi there,</p>
+                            <p>The bot for account <strong>${loginEmail.split('@')[0]}</strong> has been logged out.</p>
+                            <p>${text}</p>
+                        </div>
+                        <div class="footer">© 2025 Uvotake. All Rights Reserved.</div>
+                    </div>
+                </body>
+            </html>
+        `;
+    }
+    const mailOptions = {
+        from: `"Uvotake" <${process.env.Email_User}>`,
+        to: `${process.env.EMAIL_TO.trim()}`, 
+        subject: subject,
+        html: htmlContent
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
@@ -224,6 +257,23 @@ const scrapeOrders = async (page) => {
 
     try {
         console.log(`[${new Date().toISOString()}] Starting a new scrape cycle...`);
+        // Refresh the available orders page
+        console.log('Refreshing the available orders page...');
+        //await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
+       
+      // Check if the current URL is the login page URL
+        const currentUrl = page.url();
+        const loginUrl = 'https://www.uvocorp.com/login.html';
+        console.log(`Current URL: ${currentUrl}`);
+        const isLoggedOut = currentUrl === loginUrl;
+        console.log(`isLoggedOut: ${isLoggedOut}`);
+
+        if (isLoggedOut) {
+            console.log('❌ Logged out of Uvocorp. Attempting to log back in...');
+            await sendEmail('Logged out of Uvocorp', 'Your account has been logged out of Uvocorp. Please to log back in.', process.env.LOGIN_EMAIL, {});
+            //await logIn(page); // Call the login function to log back in
+            return [];
+        }
 
         const orders = await page.evaluate(() => {
             return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
@@ -311,8 +361,6 @@ const scrapeOrders = async (page) => {
     }
 };
 
-
-
 const scrapeOrderDetails = async (page) => {
     // Scraping details from the order details page
     const orderDetails = await page.evaluate(() => {
@@ -358,7 +406,8 @@ const scrapeOrderDetails = async (page) => {
     return orderDetails;
 };
 
-// MongoDB Connection
+
+//MongoDB Connection
 mongoose.connect(process.env.MONGO_URIlocal, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -373,7 +422,7 @@ const checkForNewOrders = async (page) => {
     console.log('Checking for new orders...');
     
     // Scrape orders and ensure the result is an array
-    const orders = await scrapeOrders(page) || [];
+    const orders = await scrapeOrders(page) || [];  //scrapeFinishedOrders  replaced scrapeorders
     console.log('Scraped order details:', orders);
 
     if (!Array.isArray(orders)) {
@@ -511,7 +560,7 @@ let isScraping = false; // Declare isScraping globally
         await saveCookies(page, './cookies.json');
 
         // Start interval-based scraping
-        const scrapeInterval = 500; // 0.8 seconds
+        const scrapeInterval = 300; // 0.8 seconds
 
         const startScraping = async () => {
             if (!isScraping) { // Check if the scraping cycle is already running

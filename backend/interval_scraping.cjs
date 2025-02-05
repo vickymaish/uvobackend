@@ -420,8 +420,8 @@ let isScraping = false; // Declare isScraping globally
 (async () => {
     // Launch Puppeteer browser
     const browser = await puppeteer.launch({
-        headless: false,
-        executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
+        headless: true,
+       // executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
         timeout: 400000,
         slowMo: 10,
         args: [

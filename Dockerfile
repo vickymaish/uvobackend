@@ -5,4 +5,5 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm ci
 COPY backend/ .
+RUN apt-get update && apt-get install -y google-chrome-stable
 CMD [ "node", "interval_scraping.cjs" ]

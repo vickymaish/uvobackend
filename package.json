@@ -21,7 +21,8 @@
     "winston": "^3.17.0"
   },
   "scripts": {
-    "start": "node interval_scraping.cjs"
+    "start": "node interval_scraping.cjs",
+    "build": "echo 'No build step needed'"
   },
   "type": "module"
 }

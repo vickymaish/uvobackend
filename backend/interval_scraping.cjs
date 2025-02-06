@@ -344,14 +344,13 @@ const scrapeOrderDetails = async (page) => {
 };
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-}).then(() => {
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => {
     console.log('Connected to MongoDB');
-}).catch((err) => {
+  })
+  .catch((err) => {
     console.error('Error connecting to MongoDB:', err);
-});
+  });
 
 // Function to check for new orders and send notifications
 const checkForNewOrders = async (page) => {

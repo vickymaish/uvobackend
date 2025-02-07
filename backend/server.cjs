@@ -11,7 +11,7 @@ const Order = require('./models/order.cjs');
 dotenv.config();
 
 // Import the scraper
-require('./interval_scraping.cjs'); // This ensures the scraper starts
+//require('./interval_scraping.cjs'); // This ensures the scraper starts
 
 // Initialize Express
 const app = express();

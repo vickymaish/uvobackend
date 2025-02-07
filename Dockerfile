@@ -12,6 +12,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=$(which google-chrome-stable)
 COPY backend/package.json backend/package-lock.json ./  
 RUN npm ci
 
+EXPOSE 8080
 # Copy the entire backend folder into the container
 COPY backend/ ./  
 

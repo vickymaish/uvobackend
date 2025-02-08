@@ -10,7 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read # Required for actions/checkout
+      contents: read  # Required for actions/checkout
+      id-token: write  # ✅ Fix: This allows Azure login to request an ID token
 
     steps:
       - name: Checkout Repository
@@ -44,8 +45,8 @@ jobs:
     environment:
       name: 'Production'
     permissions:
-      id-token: write # Required for requesting the JWT
-      contents: read # Required for actions/checkout
+      id-token: write  # ✅ Fix: This is required for Azure login
+      contents: read  # Required for actions/checkout
 
     steps:
       - name: Login to Azure

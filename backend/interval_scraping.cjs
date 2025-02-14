@@ -344,7 +344,7 @@ const scrapeOrderDetails = async (page) => {
 };
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URIlocal, {
+mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 }).then(() => {
@@ -421,7 +421,10 @@ let isScraping = false; // Declare isScraping globally
     // Launch Puppeteer browser
     const browser = await puppeteer.launch({
         headless: false,
-        executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
+        executablePath:process.env.NODE_ENV === "production"
+        ? process.env.PUPPETEER_EXECUTABLE_PATH
+        : puppeteer.executablePath(),
+        
         timeout: 400000,
         slowMo: 10,
         args: [

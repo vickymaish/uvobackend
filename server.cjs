@@ -31,7 +31,7 @@ app.use(express.json());
 app.use(bodyParser.json());
 
 // MongoDB connection
-console.log('MONGO_URIlocal:', process.env.MONGO_URIlocal);
+console.log('MONGO_URI:', process.env.MONGO_URI);
 mongoose.connect(process.env.MONGO_URIlocal.trim(), { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('Error connecting to MongoDB:', err));
@@ -73,6 +73,6 @@ app.get('/api/orders/:orderId', async (req, res) => {
 });
 
 // Start the server
-app.listen(process.env.PORT || 4000, () => {
+app.listen(process.env.PORT || 3000, () => {
   console.log("Connected to db & listening on port", process.env.PORT || 4000);
 });

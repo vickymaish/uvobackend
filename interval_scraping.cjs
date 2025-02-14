@@ -7,7 +7,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const path= require('path')
-const Order = require('./models/order.cjs'); // Import the existing Order model
+const Order = require('./backend/models/order.cjs'); // Import the existing Order model
 // Import scrapeOrderDetails function from orderScraper.js
 //const { scrapeOrderDetails } = require('./orderScraper.cjs'); 
 //const { takeScreenshot, sendScreenshotEmail } = require('./screenshot.cjs');
@@ -206,29 +206,43 @@ const updateLastCheckedOrderId = (orderId) => {
 
 
 // Function to click the "Take Order" button
+const TAKE_ORDER_SELECTOR = process.env.TAKE_ORDER_SELECTOR; // Declare globally
+
 const clickTakeOrderButton = async (page, orderId) => {
     try {
-        const takeOrderSelector = process.env.TAKE_ORDER_SELECTOR;  // Selector from .env
-
         console.log(`Waiting for "Take Order" button for order ${orderId}...`);
-
-        // Wait for "Take Order" button to appear (or timeout after 3 seconds)
-        await page.waitForSelector(takeOrderSelector, { timeout: 3000 }).catch(() => null);
-
-        const takeOrderButton = await page.$(takeOrderSelector);
+        // Wait for the "Take Order" button to appear
+        await page.waitForSelector(TAKE_ORDER_SELECTOR, { timeout: 5000 }).catch(() => null);
+        const takeOrderButton = await page.$(TAKE_ORDER_SELECTOR);
         if (takeOrderButton) {
             console.log(`Clicking the "Take Order" button for order ${orderId}...`);
             await takeOrderButton.click();
             console.log(`"Take Order" button clicked successfully for order ${orderId}.`);
         } else {
             console.log(`Order ${orderId} is a "Place Bid" type. Returning to available orders page.`);
-            await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'networkidle2' });
+            await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
         }
     } catch (error) {
         console.error(`Error clicking the "Take Order" button for order ${orderId}:`, error.message);
     }
 };
 
+const processOrders = async (page, newOrders) => {
+    for (const order of newOrders) {
+        if (!acceptedDisciplines.includes(order.discipline)) {
+            console.log(`Skipping order ${order.OrderId} (Discipline: ${order.discipline})`);
+            continue;
+        }
+        try {
+            console.log(`Navigating to order ${order.OrderId}: ${order.href}`);
+            await page.goto(order.href, { waitUntil: 'domcontentloaded' });
+            // Call the clickTakeOrderButton function
+            await clickTakeOrderButton(page, order.OrderId);
+        } catch (error) {
+            console.error(`Error processing order ${order.OrderId}:`, error.message);
+        }
+    }
+};
 
 const acceptedDisciplines = [
     'Humanities', 'Art (Fine arts, Performing arts)', 'Classic English Literature', 'Composition',
@@ -243,58 +257,82 @@ const acceptedDisciplines = [
     'Nutrition/Dietary', 'Public Administration', 'Sports'
 ];
 
-const TAKE_ORDER_SELECTOR = process.env.TAKE_ORDER_SELECTOR;
+//const TAKE_ORDER_SELECTOR = process.env.TAKE_ORDER_SELECTOR;
 
 let lastCheckedOrderId = null; // Store last processed order
 
-const scrapeOrders = async (page) => { 
+let isScraping = false; // Declare isScraping globally
+
+const scrapeOrders = async (page) => {
     if (isScraping) {
         console.log(`[${new Date().toISOString()}] Waiting for the current scrape cycle to finish...`);
         return;
     }
-
     isScraping = true;
 
     try {
         console.log(`[${new Date().toISOString()}] Starting a new scrape cycle...`);
-        // Refresh the available orders page
-        console.log('Refreshing the available orders page...');
+
+        // Load saved cookies if they exist
+        const cookiesFilePath = './cookies.json';
+        if (fs.existsSync(cookiesFilePath)) {
+            console.log('Loading saved cookies...');
+            const cookies = JSON.parse(fs.readFileSync(cookiesFilePath));
+            await page.setCookie(...cookies);
+            console.log('Cookies loaded successfully.');
+        } else {
+            console.error('No saved cookies found. Please log in manually.');
+            return [];
+        }
+
+        // Navigate to the available orders page
+        console.log('Navigating to available orders page...');
         //await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
-       
-      // Check if the current URL is the login page URL
+
+        // Check if the session is still valid
         const currentUrl = page.url();
         const loginUrl = 'https://www.uvocorp.com/login.html';
         console.log(`Current URL: ${currentUrl}`);
         const isLoggedOut = currentUrl === loginUrl;
-        console.log(`isLoggedOut: ${isLoggedOut}`);
+        console.log(`Is logged out: ${isLoggedOut}`);
 
         if (isLoggedOut) {
-            console.log('❌ Logged out of Uvocorp. Attempting to log back in...');
-            await sendEmail('Logged out of Uvocorp', 'Your account has been logged out of Uvocorp. Please to log back in.', process.env.LOGIN_EMAIL, {});
-            //await logIn(page); // Call the login function to log back in
+            console.error('❌ Logged out of Uvocorp. Attempting to log back in...');
+            await sendEmail(
+                'Logged out of Uvocorp',
+                'Your account has been logged out of Uvocorp. Please log back in.',
+                process.env.LOGIN_EMAIL,
+                {}
+            );
             return [];
         }
 
+        console.log('Successfully logged in using saved cookies.');
+
+        // Refresh the available orders page
+        console.log('Refreshing the available orders page...');
+        //await page.reload({ waitUntil: 'domcontentloaded' });
+
+        // Scrape orders
+        await page.waitForSelector('.row[data-order_id]', { timeout: 5000 }).catch(() => null); //replaced reload page with wait for selectors
         const orders = await page.evaluate(() => {
             return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
-                // **Skip revision orders**
+                // Skip revision orders
                 if (orderElement.querySelector('i.revision')) return null;
 
                 const orderId = orderElement.getAttribute('data-order_id');
                 const topicTitle = orderElement.querySelector('.title-order')?.textContent.trim() || 'N/A';
                 const discipline = orderElement.querySelector('.discipline-order')?.textContent.trim() || 'N/A';
                 const href = `https://www.uvocorp.com/order/${orderId}.html`;
-
                 const cppText = orderElement.querySelector('.cpp-order')?.textContent.trim() || 'N/A';
                 const cpp = parseFloat(cppText.replace('$', '')) || 0;
                 const costText = orderElement.querySelector('.cost-order')?.textContent.trim() || 'N/A';
                 const cost = parseFloat(costText.replace('$', '')) || 0;
 
-                // **Check if it's a 'Take Order' by verifying .take-order class**
+                // Check if it's a "Take Order" type
                 const isTakeOrder = orderElement.querySelector('.cost-order.take-order') !== null;
-
                 if (!isTakeOrder) return null; // Skip "Place Bid" orders
-                if (cpp <= 3) return null; // Skip low-paying orders
+                if (cpp < 3) return null; // Skip low-paying orders
 
                 return { OrderId: orderId, topicTitle, discipline, cpp, cost, href };
             }).filter(order => order !== null);
@@ -305,7 +343,7 @@ const scrapeOrders = async (page) => {
             return;
         }
 
-        // **Filter orders based on lastCheckedOrderId**
+        // Filter orders based on lastCheckedOrderId
         const newOrders = lastCheckedOrderId
             ? orders.filter(order => order.OrderId > lastCheckedOrderId)
             : orders;
@@ -317,100 +355,64 @@ const scrapeOrders = async (page) => {
 
         console.log(`[${new Date().toISOString()}] Found ${newOrders.length} new 'Take Order' orders.`);
 
-        // **Navigate to each order's details page and click 'Take Order'**
-        await Promise.all(
-            newOrders.map(async (order) => {
-                if (!acceptedDisciplines.includes(order.discipline)) {
-                    console.log(`Skipping order ${order.OrderId} (Discipline: ${order.discipline})`);
-                    return;
+        // Process each order
+        for (const order of newOrders) {
+            if (!acceptedDisciplines.includes(order.discipline)) {
+                console.log(`Skipping order ${order.OrderId} (Discipline: ${order.discipline})`);
+                continue;
+            }
+
+            try {
+                console.log(`Navigating to order ${order.OrderId}: ${order.href}`);
+                await page.goto(order.href, { waitUntil: 'domcontentloaded' });
+
+                // Look for the "Take Order" button
+                const takeOrderSelector = process.env.TAKE_ORDER_SELECTOR;
+                const button = await page.$(takeOrderSelector);
+                if (!button) {
+                    console.log(`Order ${order.OrderId} does not have a "Take Order" button.`);
+                    continue;
                 }
 
-                try {
-                    console.log(`Navigating to order ${order.OrderId}: ${order.href}`);
-                    await page.goto(order.href, { waitUntil: 'domcontentloaded' });
+                console.log(`Clicking "Take Order" for order ${order.OrderId}...`);
+                await button.click();
 
-                    // Look for the 'Take Order' button
-                    const button = await page.$(TAKE_ORDER_SELECTOR);
-                    if (!button) {
-                        console.log(`Order ${order.OrderId} does not have a 'Take Order' button.`);
-                        return;
-                    }
+                // Wait for confirmation
+                await page.waitForTimeout(3000); // Adjust timing if needed
 
-                    console.log(`Clicking 'Take Order' for order ${order.OrderId}...`);
-                    await button.click();
+                // Scrape order details
+                const orderDetails = await scrapeOrderDetails(page);
+                console.log(`Order ${order.OrderId} taken successfully. Details:`, orderDetails);
 
-                    // Wait a bit to confirm the order was taken
-                    await page.waitForTimeout(3000); // Adjust timing if needed
+                // Save order details to MongoDB
+                await Order.create(orderDetails);
+                console.log(`Order ${order.OrderId} saved to MongoDB.`);
 
-                    const orderDetails = await scrapeOrderDetails(page);
-                    console.log(`Order ${order.OrderId} taken successfully. Details:`, orderDetails);
-                } catch (error) {
-                    console.error(`Error processing order ${order.OrderId}:`, error.message);
-                }
-            })
-        );
-
-        // **Update lastCheckedOrderId to the most recent order**
-        lastCheckedOrderId = newOrders[0].OrderId;
-        console.log(`Updated lastCheckedOrderId to ${lastCheckedOrderId}`);
-
+                // Send email notification
+                const subject = `New Order Uvotake: ${order.OrderId}`;
+                const text = `Order ID: ${order.OrderId || 'N/A'}\n` +
+                             `Topic Title: ${order.topicTitle || 'N/A'}\n` +
+                             `Discipline: ${order.discipline || 'N/A'}\n` +
+                             `Pages: ${orderDetails.pages || 'N/A'}\n` +
+                             `Deadline: ${orderDetails.deadline || 'N/A'}\n` +
+                             `CPP: ${order.cpp || 'N/A'}\n` +
+                             `Cost: ${order.cost || 'N/A'}`;
+                await sendEmail(subject, text, process.env.LOGIN_EMAIL, orderDetails);
+                console.log(`Email sent for order ${order.OrderId}.`);
+            } catch (error) {
+                console.error(`Error processing order ${order.OrderId}:`, error.message);
+            }
+        }
     } catch (error) {
         console.error(`[${new Date().toISOString()}] Error during scrape cycle:`, error.message);
     } finally {
         isScraping = false;
     }
 };
-
-const scrapeOrderDetails = async (page) => {
-    // Scraping details from the order details page
-    const orderDetails = await page.evaluate(() => {
-        const details = {};
-
-        // Scraping details based on the label-value pairs in the <li> elements
-        const listItems = document.querySelectorAll('ul.order--tabs__content-instraction-table li');
-
-        listItems.forEach((li) => {
-            const label = li.querySelector('.order--tabs__content-instraction-table-label')?.textContent.trim();
-            const value = li.querySelector('.order--tabs__content-instraction-table-value')?.textContent.trim();
-
-            if (label && value) {
-                // Extracting specific details based on the label
-                switch (label) {
-                    case 'Price':
-                        details.price = value;
-                        break;
-                    case 'Deadline':
-                        details.deadline = value;
-                        break;
-                    case 'Pages':
-                        details.pages = value;
-                        break;
-                    case 'Type of paper':
-                        details.typeOfPaper = value;
-                        break;
-                    case 'Discipline':
-                        details.discipline = value;
-                        break;
-                    case 'Title':
-                        details.title = value;
-                        break;
-                    default:
-                        break;
-                }
-            }
-        });
-
-        return details;
-    });
-
-    return orderDetails;
-};
-
-
 //MongoDB Connection
-mongoose.connect(process.env.MONGO_URIlocal, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
+mongoose.connect(process.env.MONGO_URI, {
+    // useNewUrlParser: true,
+    // useUnifiedTopology: true,
 }).then(() => {
     console.log('Connected to MongoDB');
 }).catch((err) => {
@@ -474,8 +476,6 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
-let isScraping = false; // Declare isScraping globally
 
 (async () => {
     // Launch Puppeteer browser
@@ -560,7 +560,7 @@ let isScraping = false; // Declare isScraping globally
         await saveCookies(page, './cookies.json');
 
         // Start interval-based scraping
-        const scrapeInterval = 300; // 0.8 seconds
+        const scrapeInterval = 4000; // 0.8 seconds
 
         const startScraping = async () => {
             if (!isScraping) { // Check if the scraping cycle is already running

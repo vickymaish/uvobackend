@@ -1,0 +1,135 @@
+async function loadDependencies() {
+    const chalk = (await import('chalk')).default;
+    return { chalk };
+}
+
+async function scrapeOrders() {
+    const { chalk } = await loadDependencies();
+    console.log(chalk.green('✅ Chalk loaded successfully! Starting scraper...'));
+
+    const puppeteer = require('puppeteer');
+    const fs = require('fs');
+    const path = require('path');
+
+    // Load accepted disciplines
+    const { acceptedDisciplines } = require('../constants/disciplines.cjs');
+
+    // Load email module
+    const sendEmail = require('../modules/email.cjs');
+
+    // Load session cookies
+    const cookiesFilePath = path.join(__dirname, '../cookies.json');
+    let cookies = [];
+
+    if (fs.existsSync(cookiesFilePath)) {
+        cookies = JSON.parse(fs.readFileSync(cookiesFilePath, 'utf8'));
+        console.log(chalk.green('🍪 Loaded session cookies.'));
+    } else {
+        console.log(chalk.red('🚫 No session cookies found! Login script must be run first.'));
+        return;
+    }
+
+    // Launch Puppeteer
+    const browser = await puppeteer.launch({ 
+        headless: true ,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+
+    // Set session cookies
+    await page.setCookie(...cookies);
+    console.log(chalk.blue('🔓 Session restored. Navigating to Uvocorp...'));
+
+    while (true) {  // Keep running
+        await page.goto('https://www.uvocorp.com/orders/available.html', { waitUntil: 'domcontentloaded' });
+        console.log(chalk.blue(`[${new Date().toISOString()}] ✅ Checking for new orders...`));
+
+        await page.waitForSelector('.row[data-order_id]', { timeout: 5000 }).catch(() => null);
+
+        const allOrders = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('.row[data-order_id]')).map(orderElement => {
+                const orderId = orderElement.getAttribute('data-order_id');
+                const topicTitle = orderElement.querySelector('.title-order')?.textContent.trim() || 'N/A';
+                const discipline = orderElement.querySelector('.discipline-order')?.textContent.trim() || 'N/A';
+                const deadline = orderElement.querySelector('.time-order')?.textContent.trim() || 'N/A';
+                const cpp = parseFloat(orderElement.querySelector('.cpp-order')?.textContent.trim().replace('$', '')) || 0;
+                const cost = orderElement.querySelector('.cost-order')?.textContent.trim() || 'N/A';
+                const href = orderElement.querySelector('.order-link')?.href || 'N/A';
+
+                return { orderId, topicTitle, discipline, cpp, cost, deadline, href };
+            });
+        });
+
+        if (allOrders.length === 0) {
+            console.log(chalk.red(`[${new Date().toISOString()}] 🚫 No available orders found. Retrying in 5 seconds...`));
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds before retrying
+            continue;
+        }
+
+        console.log(chalk.blue(`[${new Date().toISOString()}] 📡 Found ${allOrders.length} orders. Logging details:`));
+
+        // Filter orders based on CPP > 3 and accepted disciplines
+        const viableOrders = allOrders.filter(order => {
+            return order.cpp >= 3 && acceptedDisciplines.includes(order.discipline);
+        });
+
+        if (viableOrders.length === 0) {
+            console.log(chalk.yellow(`[${new Date().toISOString()}] 🚫 No viable orders found. Retrying in 5 seconds...`));
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds before retrying
+            continue;
+        }
+
+        console.log(chalk.green(`[${new Date().toISOString()}] 🎯 Found ${viableOrders.length} viable orders!`));
+
+        // Log details of each viable order
+        viableOrders.forEach(order => {
+            console.log(chalk.yellow(`📋 Order ${order.orderId}: "${order.topicTitle}"`));
+            console.log(chalk.magenta(`   📖 Discipline: ${order.discipline}`));
+            console.log(chalk.cyan(`   💲 CPP: ${order.cpp} | Total Cost: ${order.cost}`));
+            console.log(chalk.green(`   ⏳ Deadline: ${order.deadline}`));
+            console.log(chalk.blue(`   🔗 Link: ${order.href}\n`));
+        });
+
+        // Loop through each viable order and check its details page
+        for (const order of viableOrders) {
+            console.log(chalk.yellow(`[${new Date().toISOString()}] 🔍 Checking Order ${order.orderId} - ${order.topicTitle}`));
+
+            if (order.href === 'N/A') {
+                console.log(chalk.red(`❌ Order ${order.orderId} has no valid link! Skipping...`));
+                continue;
+            }
+
+            const orderPage = await browser.newPage();
+            await orderPage.goto(order.href, { waitUntil: 'networkidle2' });
+
+            // Check if "Take Order" button exists
+            const takeOrderButton = await orderPage.$('li.cost-order.center.take-order');
+
+            if (takeOrderButton) {
+                console.log(chalk.green(`✅ Order ${order.orderId} has "Take Order"! Clicking...`));
+                await takeOrderButton.click();
+
+                // Send email notification
+                const subject = `New Order Taken: ${order.topicTitle}`;
+                const text = `Order ID: ${order.orderId}\nTopic: ${order.topicTitle}\nDiscipline: ${order.discipline}\nCPP: ${order.cpp}\nCost: ${order.cost}\nDeadline: ${order.deadline}\nLink: ${order.href}`;
+                await sendEmail(subject, text, process.env.LOGIN_EMAIL, order);
+
+                console.log(chalk.green(`📧 Email sent for Order ${order.orderId}!`));
+
+                await orderPage.close();
+                await browser.close(); // Close browser after taking an order
+                return;
+            } else {
+                console.log(chalk.red(`❌ Order ${order.orderId} does not have "Take Order".`));
+            }
+
+            await orderPage.close(); // Close the order page after checking
+        }
+
+        console.log(chalk.yellow(`[${new Date().toISOString()}] ⏳ Retrying in 5 seconds...`));
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds before retrying
+    }
+}
+
+// Export the scrapeOrders function
+module.exports = { scrapeOrders };

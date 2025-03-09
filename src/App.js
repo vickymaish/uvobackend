@@ -15,7 +15,7 @@ const App = () =>{
   ];
   
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loggedInAccounts, setLoggedInAccounts] = useState(accounts);
+
   const navigate = useNavigate()
 
   

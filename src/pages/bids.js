@@ -1,4 +1,4 @@
-import { AppBar, Toolbar, Typography, Box, Button } from "@mui/material";
+import { Box,  Button } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useState, useEffect } from "react";
 import Sidebar from "../components/sidebar";
@@ -23,7 +23,7 @@ const BidsPage = () => {
     }, 60000); // Scrape orders every minute
 
     return () => clearInterval(interval);
-  }, []);
+  }, [scrapeOrders]);
 
   const scrapeOrders = () => {
     // Implement your scraping logic here

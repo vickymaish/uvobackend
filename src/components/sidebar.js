@@ -1,9 +1,9 @@
 
 
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Login from "../login";
+
 import { CiLock } from "react-icons/ci";
 
 import MenuIcon from "@mui/icons-material/Menu";

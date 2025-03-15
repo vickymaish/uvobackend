@@ -13,7 +13,7 @@ const Login = ({ onLogin }) => {
 
     try {
       const response = await axios.post(
-        "http://102.37.21.212:3000/auth/login",  // ✅ Backend URL added
+        "http://102.37.21.212:3000/auth/login",  // ✅ Backend URL added for VM
         { email, password },
         {
           withCredentials: true,

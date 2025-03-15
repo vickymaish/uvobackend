@@ -1,4 +1,9 @@
-async function loadDependencies() {
+
+
+
+
+
+tijtbjiiiiiiiiiibjiwaufhcvuhgzsufdffhs cccc vbvxbasync function loadDependencies() {
     const chalk = (await import('chalk')).default;
     return { chalk };
 }
@@ -30,9 +35,7 @@ async function scrapeOrders() {
     }
 
     // Launch Puppeteer
-
-    const browser = await puppeteer.launch({
-	exectutablePath: 'usr/bin/google-chrome-stable', 
+    const browser = await puppeteer.launch({ 
         headless: true ,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
